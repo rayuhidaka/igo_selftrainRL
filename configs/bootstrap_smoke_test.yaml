@@ -1,0 +1,12 @@
+board_size: 9
+seed: 9
+checkpoint_out: checkpoints/bootstrap_smoke_test.pt
+data_source: selfplay_games/smoke_test.npz
+batch_size: 32
+learning_rate: 0.001
+epochs: 3
+log_dir: runs
+run_name: bootstrap_smoke_test
+log_every_n_steps: 1
+checkpoint_interval_steps: 5
+max_train_seconds: 30

@@ -1,0 +1,21 @@
+# First real training run -- imitation learning against selfplay/generate.py's
+# batch1.npz (see configs/selfplay_generate_base.yaml). Small-scale, not a
+# serious bootstrap attempt: proving the training loop actually learns
+# something, not producing a strong net.
+
+board_size: 9
+seed: 9
+
+checkpoint_out: checkpoints/bootstrap_batch1.pt
+data_source: selfplay_games/batch1.npz
+
+batch_size: 64
+learning_rate: 0.001
+epochs: 1000          # high on purpose -- max_train_seconds is the real stopping condition below
+
+log_dir: runs
+run_name: bootstrap_batch1
+log_every_n_steps: 10
+checkpoint_interval_steps: 200
+
+max_train_seconds: 1200  # ~20 minutes

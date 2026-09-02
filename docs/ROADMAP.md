@@ -28,13 +28,21 @@ scheduling, session length) is still to be decided — revisit when Phase
       separately confirmed.
 
 ## Phase 2 — Ray-zeroGo bootstrap
-- [ ] Collect KataGo self-play games or public 9x9 game records
-- [ ] Imitation-learning training loop (`bootstrap/`) — monitoring
-      (TensorBoard, `bootstrap/monitoring.py`) and the config fields for
-      checkpoint cadence are already wired up ahead of this, see
-      `docs/ARCHITECTURE.md`'s "Monitoring" section; the loop itself
-      (actually training on data) is still a placeholder
-- [ ] Produce Ray-zeroGo's first bootstrapped checkpoint
+- [x] Collect KataGo self-play games (`selfplay/generate.py`) — samples
+      moves directly from igo-app's real KataGo checkpoint's own policy
+      output (no tree search needed: it's already strong, this is
+      distillation, not reinforcement-learning self-play), ~20ms/move on
+      this machine. Public 9x9 game records as an alternative/additional
+      source not pursued yet.
+- [x] Imitation-learning training loop (`bootstrap/train.py`) — real
+      gradient descent now (standard AlphaZero-style loss: policy
+      cross-entropy + value MSE against `selfplay/generate.py`'s data),
+      not the Phase 1 placeholder. TensorBoard logging
+      (`bootstrap/monitoring.py`) and checkpoint-interval saving wired
+      in. Smoke-tested end to end (3 games → 214 examples → a real
+      training run, loss decreasing) before the first real batch.
+- [ ] Produce Ray-zeroGo's first bootstrapped checkpoint — infrastructure
+      is proven, first real batch not run yet
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)

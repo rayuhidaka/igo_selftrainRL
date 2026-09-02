@@ -1,0 +1,13 @@
+# Base config for selfplay/generate.py.
+
+katago_tflite_path: ../app/src/main/assets/models/katago_b10c384h6nbttflrs_b9.tflite
+board_size: 9
+komi: 7.5
+seed: 9
+
+num_games: 300
+max_moves: 200    # generous cap against a runaway game (double pass_count>=2 usually ends it sooner)
+temperature: 1.0   # >0: sample from the policy for move-to-move variety; 0: greedy/argmax
+max_seconds: 600   # optional wall-clock cap, stops early (keeping games generated so far) if set
+
+out_path: selfplay_games/batch1.npz
