@@ -3,6 +3,11 @@
 This repo's own phase numbering — distinct from `igo-app`'s, which only
 tracks the handoff points that matter to the app (see its Phase 2-4).
 
+**Training runs locally, on the user's own machine — not a rented/cloud
+GPU.** How to actually work within that (phased training runs, batch
+scheduling, session length) is still to be decided — revisit when Phase
+2 starts in earnest.
+
 ## Phase 1 (current) — scaffolding
 - [x] Repo/folder structure in place (`bootstrap/`, `selfplay/`,
       `export/`, `eval/`, `configs/`)
@@ -29,7 +34,8 @@ tracks the handoff points that matter to the app (see its Phase 2-4).
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)
-- [ ] Policy/value update loop on rented GPU (spot instances)
+- [ ] Policy/value update loop, run locally (see the local-training note
+      at the top of this file)
 - [ ] Save checkpoints at intervals — these become difficulty tiers
 - [ ] Elo tracking across generations (`eval/`)
 

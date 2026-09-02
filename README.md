@@ -12,10 +12,13 @@ net, converted directly, no training involved) — see `igo-app/tools/`.
 Phase 1 (scaffolding). See `docs/ROADMAP.md`.
 
 ## Setup (Windows)
-1. Install Python 3.11+ and a CUDA-capable environment if training
-   locally, or plan to run on a rented cloud GPU (spot instance) for
-   anything beyond small experiments — 9x9 self-play is far cheaper than
-   19x19 but still meaningfully GPU-bound.
+1. Training runs locally on this machine — no rented/cloud GPU. Install
+   Python 3.11+ and a CUDA-capable environment if a local GPU is
+   available; 9x9 self-play is far cheaper than 19x19 but still
+   meaningfully GPU-bound, so expect training to take real wall-clock
+   time on consumer hardware. How to actually structure that (phased
+   training, batch sizes/scheduling, etc.) is still to be worked out —
+   see docs/ROADMAP.md's Phase 2.
 2. If working under WSL2 (this repo's actual dev environment so far —
    native Windows hit TensorFlow-blocked-by-Smart-App-Control the same
    way igo-app's tools/ did, see igo-app/docs/BUILD_NOTES.md): put the

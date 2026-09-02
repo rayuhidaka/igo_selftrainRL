@@ -24,8 +24,10 @@ dependencies on anything outside this folder.
 - Python, PyTorch (training)
 - ONNX for the intermediate export format, then converted to TensorFlow
   Lite for the app
-- Self-play / distillation scripts run locally for small experiments;
-  full training runs on rented cloud GPU (spot instances)
+- All training — bootstrap, self-play, everything — runs locally on this
+  machine. No rented/cloud GPU. Exact workflow (phased training, batch
+  scheduling, how long runs are allowed to take) isn't decided yet — see
+  docs/ROADMAP.md's Phase 2.
 
 ## Architecture
 - `bootstrap/` — imitation-learning training against KataGo self-play

@@ -84,11 +84,16 @@ training-time and inference-time inputs would silently diverge.
      `export/to_tflite.py`.
 
 ## Compute notes
-9x9 self-play is far cheaper than 19x19, but still real GPU work.
-Bootstrapping via imitation learning from KataGo first (rather than
-training from a random initialization) cuts the compute needed
-substantially — this is the intended default path, not an optional
-shortcut.
+Training runs locally on the user's own machine — no rented/cloud GPU,
+by deliberate choice (see docs/ROADMAP.md's Phase 2). 9x9 self-play is
+far cheaper than 19x19, but still real GPU work, so expect it to take
+real wall-clock time on consumer hardware. Bootstrapping via imitation
+learning from KataGo first (rather than training from a random
+initialization) cuts the compute needed substantially — this is the
+intended default path, not an optional shortcut. How to actually
+structure the work given a local-only budget (phased training runs,
+batch scheduling, how long a run is allowed to take before checking in)
+is not decided yet — to be worked out when Phase 2 starts in earnest.
 
 ## Explicitly deferred
 - Training on board sizes other than 9x9
