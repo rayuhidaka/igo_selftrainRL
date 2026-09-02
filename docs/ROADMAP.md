@@ -46,10 +46,15 @@ scheduling, session length) is still to be decided — revisit when Phase
       (`should_promote`) — fully implemented and tested
       (`tests/test_elo.py`). See `docs/ARCHITECTURE.md`'s "Difficulty-tier
       promotion" section for the design.
+- [x] `engine/` — Python port of `igo-app/engine/`'s Go rules (rules
+      enforcement: legality, capture/ko, area scoring). Proven against a
+      full port of `igo-app/engine/`'s own test suite
+      (`tests/test_position.py`, `tests/test_scoring.py`, 20 tests, all
+      passing) — not just eyeballed.
 - [ ] Actually playing games between checkpoints (`eval/match.py`) —
-      blocked on a Python Go rules engine that doesn't exist yet
-      (recommended approach: port `igo-app/engine/`'s rules; see
-      `eval/match.py`'s docstring). Without this, `eval/promote.py`
+      `engine/` now covers rules, but there's no *search* yet (something
+      that plays better than uniformly-random moves). See
+      `eval/match.py`'s docstring. Without this, `eval/promote.py`
       can't run.
 
 ## Phase 4 — Handoff to igo-app

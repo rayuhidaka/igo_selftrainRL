@@ -125,18 +125,22 @@ are different decisions on different cadences:
   instead of a meaningful ladder from weak to strong.
 
 `eval/elo.py` (the rating math) is fully implemented and tested
-(`tests/test_elo.py`) — it has no dependency on anything else. `eval/match.py`
-(actually playing a game between two checkpoints) is **not implemented
-yet**: it needs rules enforcement and some search, neither of which exist
-in this repo. The recommended approach, not yet started: port
-`igo-app/engine/`'s Go rules (Kotlin) to Python rather than writing a
-second implementation — it's small (a few hundred lines: `Position`,
-`Move`, legality, capture/ko, area scoring) and already unit-tested there,
-so porting it keeps both codebases agreeing on what a legal game even is.
-The search side doesn't need to reproduce `igo-app/mcts/`'s exact PUCT
-implementation — just something that plays better than uniformly-random
-moves, or Elo differences between similar-strength checkpoints won't be
-measurable at a practical number of games.
+(`tests/test_elo.py`) — it has no dependency on anything else. `engine/`
+(rules enforcement: legality, capture/ko, area scoring) is now a Python
+port of `igo-app/engine/`'s Go rules (Kotlin) — see `engine/README.md` —
+rather than a second, independently-written implementation, specifically
+to avoid the two codebases silently disagreeing about what a legal game
+even is. It's proven against a full port of `igo-app/engine/`'s own test
+suite (`tests/test_position.py`, `tests/test_scoring.py`), not just
+eyeballed — all passing.
+
+`eval/match.py` (actually playing a game between two checkpoints) is
+still **not implemented**: `engine/` gives it rules, but it still needs
+*search* — something that plays better than uniformly-random moves, or
+Elo differences between similar-strength checkpoints won't be measurable
+at a practical number of games. Doesn't need to reproduce
+`igo-app/mcts/`'s exact PUCT implementation, just needs to exist. Not yet
+started.
 
 ## Explicitly deferred
 - Training on board sizes other than 9x9

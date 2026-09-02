@@ -9,8 +9,9 @@ design and `../docs/ROADMAP.md`'s Phase 3.
   implemented and tested (`../tests/test_elo.py`) — no dependency on
   anything below.
 - `match.py` — plays games between two checkpoints to produce `elo.py`'s
-  inputs. **Not implemented yet**: needs a Python Go rules engine (see its
-  docstring for the recommended approach) that doesn't exist yet.
+  inputs. **Not implemented yet**: rules are covered now (`../engine/`,
+  a Python port of `igo-app/engine/`), but there's no search yet — see
+  its docstring.
 - `promote.py` — orchestrates the two: play a candidate against the
   current tier, update ratings, decide whether to promote. Blocked on
   `match.py`.
