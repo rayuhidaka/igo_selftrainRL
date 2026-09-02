@@ -59,11 +59,20 @@ scheduling, session length) is still to be decided — revisit when Phase
         transient issue writing to `/mnt/c` (the Windows-mounted
         project path) under heavy repeated I/O (~1300 checkpoint saves
         over the run), not a logic bug; a checkpoint from shortly before
-        the failure survived and loads fine. Worth hardening
-        (retry-on-save-failure, and/or moving `checkpoints/`/`runs/`
-        output to native WSL storage the way the venv already is — see
-        `docs/BUILD_NOTES.md`-equivalent notes in igo-app) before a
-        longer/unattended run.
+        the failure survived and loads fine.
+      - **Hardened (2026-09-03):** `checkpoints/`, `runs/`, and
+        `selfplay_games/` are now symlinks (from the repo, still on
+        `/mnt/c`) to real directories on native WSL storage
+        (`~/igo_training_runs/...`), same fix as the venv itself (see
+        `docs/BUILD_NOTES.md`-equivalent notes in igo-app) — repo-relative
+        config paths (`checkpoints/foo.pt`, `log_dir: runs`, etc.) work
+        unchanged. `.gitignore` entries for these three switched from
+        `dir/` to `dir` (no trailing slash), since a trailing-slash
+        pattern only matches a real directory, not a symlink to one.
+        `bootstrap/train.py`'s checkpoint saves also now retry (3
+        attempts, 2s apart) on `RuntimeError` before giving up. Verified:
+        full unit test suite (43 tests) and a real smoke-test training
+        run both pass with the new symlinked paths.
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)

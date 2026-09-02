@@ -24,6 +24,24 @@ from bootstrap.dataset import SelfPlayDataset, SelfPlayExamples
 from bootstrap.model import RayZeroNet
 from bootstrap.monitoring import TrainingMonitor
 
+# checkpoints/runs/selfplay_games are symlinked to native WSL storage (not
+# /mnt/c) specifically to avoid this, but a transient drvfs-style write
+# failure is cheap to retry and expensive to lose a run over.
+_SAVE_RETRIES = 3
+_SAVE_RETRY_DELAY_SECONDS = 2.0
+
+
+def _save_checkpoint(model: RayZeroNet, checkpoint_out: Path) -> None:
+    for attempt in range(1, _SAVE_RETRIES + 1):
+        try:
+            torch.save(model.state_dict(), checkpoint_out)
+            return
+        except RuntimeError as e:
+            if attempt == _SAVE_RETRIES:
+                raise
+            print(f"torch.save failed (attempt {attempt}/{_SAVE_RETRIES}): {e} -- retrying")
+            time.sleep(_SAVE_RETRY_DELAY_SECONDS)
+
 
 def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor) -> None:
     examples = SelfPlayExamples.load(Path(config["data_source"]))
@@ -57,19 +75,19 @@ def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor) -> None:
                 monitor.log_scalar("loss/total", loss.item(), step)
 
             if step % config["checkpoint_interval_steps"] == 0:
-                torch.save(model.state_dict(), checkpoint_out)
+                _save_checkpoint(model, checkpoint_out)
                 print(f"[step {step}] checkpointed to {checkpoint_out}")
 
             elapsed = time.time() - start
             if max_train_seconds is not None and elapsed > max_train_seconds:
                 print(f"Hit max_train_seconds ({max_train_seconds}) at step {step}, stopping.")
-                torch.save(model.state_dict(), checkpoint_out)
+                _save_checkpoint(model, checkpoint_out)
                 print(f"Wrote final checkpoint to {checkpoint_out} after {step} steps, {elapsed:.1f}s")
                 return
 
         print(f"Epoch {epoch + 1}/{config['epochs']} complete ({step} steps, {time.time() - start:.1f}s elapsed)")
 
-    torch.save(model.state_dict(), checkpoint_out)
+    _save_checkpoint(model, checkpoint_out)
     print(f"Wrote final checkpoint to {checkpoint_out} after {step} steps, {time.time() - start:.1f}s")
 
 

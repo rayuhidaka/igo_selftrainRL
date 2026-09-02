@@ -4,15 +4,18 @@ __pycache__/
 .venv/
 *.egg-info/
 
-# Training artifacts — never commit large binaries
+# Training artifacts — never commit large binaries.
+# No trailing slash: these are symlinks to native WSL storage (see
+# docs/ROADMAP.md), and a trailing-slash pattern only matches real
+# directories, not a symlink pointing at one.
 *.pt
 *.pth
 *.onnx
 *.tflite
-checkpoints/
-selfplay_games/
+checkpoints
+selfplay_games
 logs/
-runs/
+runs
 
 # Env / secrets
 .env
