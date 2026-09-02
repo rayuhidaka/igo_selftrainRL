@@ -16,3 +16,16 @@ data_source: null       # path to KataGo self-play games or public 9x9 records
 batch_size: 256
 learning_rate: 0.001
 epochs: 1
+
+# Monitoring (TensorBoard, local only -- see bootstrap/monitoring.py).
+# View a run with: tensorboard --logdir runs/
+log_dir: runs
+run_name: bootstrap_base
+log_every_n_steps: 100
+
+# How often Phase 2's real training loop checkpoints. This is NOT the same
+# as promoting a checkpoint to a shippable difficulty tier -- checkpoint
+# often and cheaply for resumability; promotion is a separate, Elo-gated
+# decision made by eval/promote.py. See docs/ARCHITECTURE.md's
+# "Difficulty-tier promotion" section.
+checkpoint_interval_steps: 1000

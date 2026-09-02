@@ -5,6 +5,7 @@
 torch==2.9.1
 numpy==2.5.2
 pyyaml==6.0.3
+tensorboard==2.21.0
 
 # Needed only for export/to_tflite.py (PyTorch -> ONNX -> TFLite). See
 # igo-app/tools/requirements.txt -- these are the same working versions

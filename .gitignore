@@ -12,6 +12,7 @@ __pycache__/
 checkpoints/
 selfplay_games/
 logs/
+runs/
 
 # Env / secrets
 .env

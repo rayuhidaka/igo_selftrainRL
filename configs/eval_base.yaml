@@ -1,0 +1,13 @@
+# Base config for eval/promote.py.
+#
+# Blocked on eval/match.py's game-playing NotImplementedError -- see
+# docs/ARCHITECTURE.md's "Difficulty-tier promotion" section.
+
+board_size: 9
+num_games: 100
+
+# The checkpoint currently shipped as the most recent difficulty tier.
+# A candidate is only promoted to replace/extend this if it clears it by
+# min_elo_gap -- see eval/elo.py's should_promote.
+current_tier_checkpoint: checkpoints/tiers/latest.pt
+min_elo_gap: 50

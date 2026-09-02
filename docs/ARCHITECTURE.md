@@ -95,6 +95,49 @@ structure the work given a local-only budget (phased training runs,
 batch scheduling, how long a run is allowed to take before checking in)
 is not decided yet — to be worked out when Phase 2 starts in earnest.
 
+## Monitoring
+`bootstrap/monitoring.py`'s `TrainingMonitor` wraps TensorBoard
+(`torch.utils.tensorboard`), run entirely locally — no account or cloud
+service, consistent with the local-training decision above. View a run
+with `tensorboard --logdir runs/` while training is in progress or after.
+`bootstrap/train.py` already logs the run's config at start; the real
+training loop (Phase 2) should call `monitor.log_scalar(...)` for
+policy/value loss at `config["log_every_n_steps"]` — see the TODO block in
+`bootstrap/train.py`. `selfplay/`'s loop, once it exists, should use the
+same `TrainingMonitor` rather than inventing a second logging path.
+
+## Difficulty-tier promotion (eval/)
+
+Checkpointing and *promoting* a checkpoint to a shippable difficulty tier
+are different decisions on different cadences:
+
+- **Checkpointing** (`bootstrap/train.py`'s `config["checkpoint_interval_steps"]`,
+  and later `selfplay/`'s equivalent) is cheap and frequent — purely for
+  resumability, not a quality judgment.
+- **Promotion** (`eval/promote.py`) happens far less often, and is gated on
+  actually being stronger: a candidate checkpoint is played against the
+  currently-shipped tier (`eval/match.py`, `configs/eval_base.yaml`'s
+  `num_games`), the results feed `eval/elo.py`'s `update_ratings`, and the
+  candidate is only promoted (`should_promote`) if it clears the current
+  tier by at least `min_elo_gap`. This is deliberate: checkpointing every
+  N steps and shipping *all* of them as difficulty tiers would fill the
+  app's difficulty picker with many near-identical-strength options
+  instead of a meaningful ladder from weak to strong.
+
+`eval/elo.py` (the rating math) is fully implemented and tested
+(`tests/test_elo.py`) — it has no dependency on anything else. `eval/match.py`
+(actually playing a game between two checkpoints) is **not implemented
+yet**: it needs rules enforcement and some search, neither of which exist
+in this repo. The recommended approach, not yet started: port
+`igo-app/engine/`'s Go rules (Kotlin) to Python rather than writing a
+second implementation — it's small (a few hundred lines: `Position`,
+`Move`, legality, capture/ko, area scoring) and already unit-tested there,
+so porting it keeps both codebases agreeing on what a legal game even is.
+The search side doesn't need to reproduce `igo-app/mcts/`'s exact PUCT
+implementation — just something that plays better than uniformly-random
+moves, or Elo differences between similar-strength checkpoints won't be
+measurable at a practical number of games.
+
 ## Explicitly deferred
 - Training on board sizes other than 9x9
 - Any online/continuous training after initial checkpoints ship

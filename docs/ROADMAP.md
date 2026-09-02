@@ -29,15 +29,28 @@ scheduling, session length) is still to be decided — revisit when Phase
 
 ## Phase 2 — Ray-zeroGo bootstrap
 - [ ] Collect KataGo self-play games or public 9x9 game records
-- [ ] Imitation-learning training loop (`bootstrap/`)
+- [ ] Imitation-learning training loop (`bootstrap/`) — monitoring
+      (TensorBoard, `bootstrap/monitoring.py`) and the config fields for
+      checkpoint cadence are already wired up ahead of this, see
+      `docs/ARCHITECTURE.md`'s "Monitoring" section; the loop itself
+      (actually training on data) is still a placeholder
 - [ ] Produce Ray-zeroGo's first bootstrapped checkpoint
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)
 - [ ] Policy/value update loop, run locally (see the local-training note
       at the top of this file)
-- [ ] Save checkpoints at intervals — these become difficulty tiers
-- [ ] Elo tracking across generations (`eval/`)
+- [ ] Save checkpoints at intervals — these become candidate difficulty
+      tiers, gated on Elo (`eval/`), not shipped automatically
+- [x] Elo rating math (`eval/elo.py`) and the promotion gate
+      (`should_promote`) — fully implemented and tested
+      (`tests/test_elo.py`). See `docs/ARCHITECTURE.md`'s "Difficulty-tier
+      promotion" section for the design.
+- [ ] Actually playing games between checkpoints (`eval/match.py`) —
+      blocked on a Python Go rules engine that doesn't exist yet
+      (recommended approach: port `igo-app/engine/`'s rules; see
+      `eval/match.py`'s docstring). Without this, `eval/promote.py`
+      can't run.
 
 ## Phase 4 — Handoff to igo-app
 - [ ] Export selected checkpoints to `.tflite` (`export/`)
