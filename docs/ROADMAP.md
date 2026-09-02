@@ -41,8 +41,29 @@ scheduling, session length) is still to be decided — revisit when Phase
       (`bootstrap/monitoring.py`) and checkpoint-interval saving wired
       in. Smoke-tested end to end (3 games → 214 examples → a real
       training run, loss decreasing) before the first real batch.
-- [ ] Produce Ray-zeroGo's first bootstrapped checkpoint — infrastructure
-      is proven, first real batch not run yet
+- [x] Produce Ray-zeroGo's first bootstrapped checkpoint — first real run:
+      300 self-play games → 22,621 examples (~7.6 min), then training
+      capped at 20 minutes (`configs/bootstrap_train_batch1.yaml`).
+      Policy loss dropped from ~4.4 (the exact value a uniform-random
+      82-way guess scores, `ln(82)`) to ~2.3 -- genuine learning, not
+      noise. Two things to know about this specific checkpoint before
+      reading too much into it:
+      - It saw the same fixed 22,621-example batch roughly 780 times
+        over (a lot of steps, not much data) -- almost certainly
+        overfit/memorized rather than generalized. Proves the loop
+        learns; isn't a meaningfully strong net. More self-play data
+        (not more epochs on the same data) is the fix for a real
+        attempt.
+      - A `torch.save` call failed once near the very end of the run
+        (`RuntimeError: File ... cannot be opened`) -- looked like a
+        transient issue writing to `/mnt/c` (the Windows-mounted
+        project path) under heavy repeated I/O (~1300 checkpoint saves
+        over the run), not a logic bug; a checkpoint from shortly before
+        the failure survived and loads fine. Worth hardening
+        (retry-on-save-failure, and/or moving `checkpoints/`/`runs/`
+        output to native WSL storage the way the venv already is — see
+        `docs/BUILD_NOTES.md`-equivalent notes in igo-app) before a
+        longer/unattended run.
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)
