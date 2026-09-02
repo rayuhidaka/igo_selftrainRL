@@ -1,0 +1,18 @@
+# Second self-play batch -- a real (not small-scale) bootstrap attempt.
+# batch1.npz (configs/selfplay_generate_base.yaml) was 300 games / 22,621
+# examples, explicitly called out as too small to avoid overfitting on;
+# this is 10x the games. Different seed from batch1's so this isn't just
+# batch1's exact game sequence plus more (a fresh `random.Random(seed)`
+# reproduces the same early games as any other run sharing its seed).
+
+katago_tflite_path: ../app/src/main/assets/models/katago_b10c384h6nbttflrs_b9.tflite
+board_size: 9
+komi: 7.5
+seed: 20260903
+
+num_games: 3000
+max_moves: 200
+temperature: 1.0
+max_seconds: null   # let it run to completion; ~75-90 min expected at ~1.5s/game
+
+out_path: selfplay_games/batch2.npz

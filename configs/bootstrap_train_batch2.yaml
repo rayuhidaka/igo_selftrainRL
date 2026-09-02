@@ -1,0 +1,22 @@
+# Second real training run -- against batch2.npz (3000 self-play games,
+# 224,730 examples; see configs/selfplay_generate_batch2.yaml), 10x
+# batch1's game count and data. batch1's checkpoint saw its whole (much
+# smaller) dataset ~780 times over in 20 min, flagged as overfit; this
+# run targets a much lower epoch count over meaningfully more data.
+
+board_size: 9
+seed: 9
+
+checkpoint_out: checkpoints/bootstrap_batch2.pt
+data_source: selfplay_games/batch2.npz
+
+batch_size: 64
+learning_rate: 0.001
+epochs: 50
+
+log_dir: runs
+run_name: bootstrap_batch2
+log_every_n_steps: 50
+checkpoint_interval_steps: 1000
+
+max_train_seconds: 3600  # safety cap (~1hr); 50 epochs over this data shouldn't need it

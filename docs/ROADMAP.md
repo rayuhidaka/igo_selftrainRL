@@ -73,6 +73,23 @@ scheduling, session length) is still to be decided — revisit when Phase
         attempts, 2s apart) on `RuntimeError` before giving up. Verified:
         full unit test suite (43 tests) and a real smoke-test training
         run both pass with the new symlinked paths.
+- [x] **First real (non-overfit) bootstrap attempt (2026-09-03):** 10x
+      batch1's scale. `configs/selfplay_generate_batch2.yaml` generated
+      3,000 self-play games → 224,730 examples (~78 min) to
+      `selfplay_games/batch2.npz`; `configs/bootstrap_train_batch2.yaml`
+      trained 50 epochs over the full set (175,550 steps, ~12.6 min, no
+      save failures — the hardening above held up) to
+      `checkpoints/bootstrap_batch2.pt`. Total loss dropped from ~5.3
+      (near the uniform-random baseline) to ~3.3 by epoch 25, then
+      plateaued/noisy around 3.1-3.6 through epoch 50 rather than
+      continuing to fall — unlike batch1's near-800-epoch run on a fixed
+      small batch, this looks like the tiny 2-conv-layer net (see
+      `bootstrap/model.py`) hitting its capacity ceiling on real data,
+      not memorization. This is now a genuine (if weak, architecture-
+      limited) bootstrapped checkpoint, not just a proof the loop learns.
+      Not yet evaluated for actual playing strength (`eval/match.py`
+      against `bootstrap_batch1.pt` or a random baseline) or exported to
+      `.tflite` — both open for next time.
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)
