@@ -1,0 +1,15 @@
+# A fast, cheap sanity check that eval/promote.py's whole pipeline still
+# works after a change -- not a meaningful Elo estimate (4 games, 16
+# simulations each, both nets untrained). Needs two checkpoints to exist
+# first:
+#   python -m bootstrap.train --config configs/bootstrap_base.yaml
+#   python -m bootstrap.train --config configs/bootstrap_seed2.yaml
+#   python -m eval.promote --config configs/eval_smoke_test.yaml \
+#       --candidate checkpoints/bootstrap_seed2.pt
+
+board_size: 9
+num_games: 4
+num_simulations: 16
+komi: 7.5
+current_tier_checkpoint: checkpoints/bootstrap_placeholder.pt
+min_elo_gap: 50

@@ -2,8 +2,6 @@
 tier, by playing it against the current tier and applying eval/elo.py's
 promotion gate. See docs/ARCHITECTURE.md's "Difficulty-tier promotion".
 
-Blocked on eval/match.py's NotImplementedError until that exists.
-
 Usage:
     python -m eval.promote --config configs/eval_base.yaml --candidate <path>.pt
 """
@@ -16,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from eval.elo import DEFAULT_INITIAL_RATING, should_promote, update_ratings
-from eval.match import play_match
+from eval.match import DEFAULT_KOMI, DEFAULT_NUM_SIMULATIONS, play_match
 
 
 def main() -> None:
@@ -28,7 +26,14 @@ def main() -> None:
     config = yaml.safe_load(args.config.read_text())
     current_tier = Path(config["current_tier_checkpoint"])
 
-    results = play_match(args.candidate, current_tier, config["board_size"], config["num_games"])
+    results = play_match(
+        args.candidate,
+        current_tier,
+        config["board_size"],
+        config["num_games"],
+        num_simulations=config.get("num_simulations", DEFAULT_NUM_SIMULATIONS),
+        komi=config.get("komi", DEFAULT_KOMI),
+    )
     candidate_rating, tier_rating = update_ratings(DEFAULT_INITIAL_RATING, DEFAULT_INITIAL_RATING, results)
 
     promoted = should_promote(candidate_rating, tier_rating, config["min_elo_gap"])

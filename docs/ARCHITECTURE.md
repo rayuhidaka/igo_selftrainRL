@@ -134,13 +134,28 @@ even is. It's proven against a full port of `igo-app/engine/`'s own test
 suite (`tests/test_position.py`, `tests/test_scoring.py`), not just
 eyeballed — all passing.
 
-`eval/match.py` (actually playing a game between two checkpoints) is
-still **not implemented**: `engine/` gives it rules, but it still needs
-*search* — something that plays better than uniformly-random moves, or
-Elo differences between similar-strength checkpoints won't be measurable
-at a practical number of games. Doesn't need to reproduce
-`igo-app/mcts/`'s exact PUCT implementation, just needs to exist. Not yet
-started.
+`eval/match.py` (actually playing a game between two checkpoints) is done
+too, closing out the whole `eval/` pipeline: it uses `mcts/` (a Python
+port of `igo-app/mcts/`'s PUCT search — see `mcts/README.md`, proven
+against a full port of `igo-app/mcts/`'s own test suite,
+`tests/test_mcts.py`) driven by `bootstrap/inference.py`'s
+`RayZeroPolicyValueNet` (a `PolicyValueNet` implementation over a
+`RayZeroNet` checkpoint, mirroring `igo-app/inference/TfLitePolicyValueNet.kt`'s
+encode/decode logic — `tests/test_inference.py` ports its test suite too).
+`play_match` alternates which checkpoint plays Black each game so a color
+advantage doesn't bias the result. Verified two ways:
+- `tests/test_match.py`: a checkpoint played against itself averages to a
+  ~50/50 result (expected, since neither `Mcts` nor `RayZeroPolicyValueNet`
+  introduces randomness — the alternation exactly cancels whatever a fixed
+  color advantage would otherwise cause).
+- A real CLI run, not just unit tests: two untrained 9x9 checkpoints,
+  `configs/eval_smoke_test.yaml` (4 games, 16 simulations/move) via
+  `python -m eval.promote`, produced a real Elo verdict in ~23 seconds
+  (`Candidate rating: 1555.8 vs current tier: 1444.2` → `PROMOTE`). See
+  that config's header for the exact commands to reproduce.
+
+`eval/`'s design is now fully implemented end to end — what's left is
+real training producing checkpoints actually worth evaluating (Phase 2).
 
 ## Explicitly deferred
 - Training on board sizes other than 9x9

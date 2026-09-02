@@ -51,11 +51,20 @@ scheduling, session length) is still to be decided — revisit when Phase
       full port of `igo-app/engine/`'s own test suite
       (`tests/test_position.py`, `tests/test_scoring.py`, 20 tests, all
       passing) — not just eyeballed.
-- [ ] Actually playing games between checkpoints (`eval/match.py`) —
-      `engine/` now covers rules, but there's no *search* yet (something
-      that plays better than uniformly-random moves). See
-      `eval/match.py`'s docstring. Without this, `eval/promote.py`
-      can't run.
+- [x] `mcts/` — Python port of `igo-app/mcts/`'s PUCT search, and
+      `bootstrap/inference.py`'s `RayZeroPolicyValueNet` (mirrors
+      `igo-app/inference/TfLitePolicyValueNet.kt`'s encode/decode).
+      Proven against ports of both their test suites (`tests/test_mcts.py`,
+      `tests/test_inference.py`).
+- [x] Actually playing games between checkpoints (`eval/match.py`) — done,
+      using `mcts/` + `engine/`. Verified two ways: a symmetry test
+      (`tests/test_match.py`, a checkpoint played against itself averages
+      to ~50/50) and a real CLI run (`configs/eval_smoke_test.yaml`, two
+      untrained 9x9 checkpoints, 4 games via `python -m eval.promote`,
+      produced a real Elo verdict in ~23s). `eval/`'s whole pipeline
+      (`elo.py` → `match.py` → `promote.py`) is now implemented end to
+      end — what's missing is real checkpoints worth evaluating, i.e.
+      Phase 2 actually happening.
 
 ## Phase 4 — Handoff to igo-app
 - [ ] Export selected checkpoints to `.tflite` (`export/`)

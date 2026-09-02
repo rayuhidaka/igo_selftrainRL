@@ -1,10 +1,9 @@
 # Base config for eval/promote.py.
-#
-# Blocked on eval/match.py's game-playing NotImplementedError -- see
-# docs/ARCHITECTURE.md's "Difficulty-tier promotion" section.
 
 board_size: 9
 num_games: 100
+num_simulations: 200    # MCTS simulations per move -- eval/match.py's default if omitted
+komi: 7.5                # eval/match.py's default if omitted
 
 # The checkpoint currently shipped as the most recent difficulty tier.
 # A candidate is only promoted to replace/extend this if it clears it by

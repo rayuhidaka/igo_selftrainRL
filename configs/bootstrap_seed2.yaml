@@ -1,0 +1,15 @@
+# A second untrained checkpoint (different seed than bootstrap_base.yaml's),
+# for eval_smoke_test.yaml to have two distinct checkpoints to play against
+# each other -- not a real training variant.
+
+board_size: 9
+seed: 2
+checkpoint_out: checkpoints/bootstrap_seed2.pt
+data_source: null
+batch_size: 256
+learning_rate: 0.001
+epochs: 1
+log_dir: runs
+run_name: bootstrap_seed2
+log_every_n_steps: 100
+checkpoint_interval_steps: 1000
