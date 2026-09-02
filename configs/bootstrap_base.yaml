@@ -1,0 +1,18 @@
+# Base config for bootstrap/train.py.
+#
+# This is Phase 1 scaffolding: only the fields needed to build and save an
+# untrained net (proving the export/loading path end-to-end) are wired up.
+# Real imitation-learning fields (data source, batch size, learning rate,
+# epochs) are listed but unused until Phase 2's training loop exists.
+
+board_size: 9
+seed: 9
+
+# Where bootstrap/train.py writes the (currently untrained) checkpoint.
+checkpoint_out: checkpoints/bootstrap_placeholder.pt
+
+# Phase 2 fields -- not yet read by anything.
+data_source: null       # path to KataGo self-play games or public 9x9 records
+batch_size: 256
+learning_rate: 0.001
+epochs: 1

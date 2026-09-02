@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Training artifacts — never commit large binaries
+*.pt
+*.pth
+*.onnx
+*.tflite
+checkpoints/
+selfplay_games/
+logs/
+
+# Env / secrets
+.env

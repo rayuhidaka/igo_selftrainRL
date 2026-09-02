@@ -1,0 +1,21 @@
+# On a CPU-only machine, install with:
+#   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+# torch's default PyPI wheel bundles ~10GB of CUDA/cuDNN deps a CPU-only
+# box never uses -- see README.md's Setup section.
+torch==2.9.1
+numpy==2.5.2
+pyyaml==6.0.3
+
+# Needed only for export/to_tflite.py (PyTorch -> ONNX -> TFLite). See
+# igo-app/tools/requirements.txt -- these are the same working versions
+# already proven against igo-app's own conversion pipeline.
+onnx==1.22.0
+onnx2tf==1.28.8
+onnxruntime==1.29.0
+onnx-graphsurgeon==0.6.1
+sng4onnx==2.0.1
+tensorflow-cpu==2.21.0
+tf_keras==2.21.0
+psutil==7.2.2
+ai-edge-litert==2.2.0
+flatbuffers
