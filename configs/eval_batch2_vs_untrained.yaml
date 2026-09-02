@@ -1,0 +1,12 @@
+# Sanity-check floor: does batch2's checkpoint at least clearly beat a
+# fresh, untrained net? If not, something's wrong upstream of the Elo
+# question in eval_batch2_vs_batch1.yaml. See that config's comment for
+# why num_simulations is 50, not the 200 default.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_placeholder.pt
+min_elo_gap: 50

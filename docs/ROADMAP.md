@@ -87,9 +87,21 @@ scheduling, session length) is still to be decided — revisit when Phase
       `bootstrap/model.py`) hitting its capacity ceiling on real data,
       not memorization. This is now a genuine (if weak, architecture-
       limited) bootstrapped checkpoint, not just a proof the loop learns.
-      Not yet evaluated for actual playing strength (`eval/match.py`
-      against `bootstrap_batch1.pt` or a random baseline) or exported to
-      `.tflite` — both open for next time.
+- [x] **Evaluated batch2 for actual playing strength (2026-09-03):**
+      `configs/eval_batch2_vs_batch1.yaml` and
+      `configs/eval_batch2_vs_untrained.yaml` (40 games each,
+      50 simulations/move — a 200-simulation timing test took ~101s/game,
+      too slow for a meaningful sample size at similar total compute) via
+      `eval/promote.py`. Result: `bootstrap_batch2.pt` won **all 40
+      games** against both `bootstrap_batch1.pt` and a fresh untrained
+      checkpoint (1726.1 vs 1273.9 in both matches — identical numbers
+      because Elo's update only depends on the win/loss sequence, not
+      opponent identity, and both were 40-0 shutouts). Confirms two
+      things: batch2 is a real, working player (clearly beats random),
+      and batch1 was exactly as overfit as suspected — it plays no
+      better than an untrained net once put in an actual game, despite
+      its training loss having dropped much further than batch2's.
+      Not yet exported to `.tflite` — open for next time.
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)

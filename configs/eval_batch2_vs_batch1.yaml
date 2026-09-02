@@ -1,0 +1,18 @@
+# Is batch2's checkpoint (10x the self-play data, 50 epochs -- see
+# docs/ROADMAP.md's Phase 2) actually stronger than batch1's (300 games,
+# ~780 epochs, flagged as overfit), or was the plateau in batch2's
+# training loss a real capacity ceiling either way?
+#
+# num_simulations dropped from the 200 default: a timing test at 200
+# took ~101s/game (unbatched PyTorch MCTS, not the TFLite path
+# selfplay/generate.py uses) -- 4 games wasn't enough to be more than
+# noise anyway. More games at fewer simulations/move gives a more
+# reliable Elo estimate for similar total compute.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch1.pt
+min_elo_gap: 50
