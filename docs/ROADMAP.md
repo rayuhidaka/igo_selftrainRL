@@ -273,6 +273,30 @@ scheduling, session length) is still to be decided — revisit when Phase
       it reaches the saved dataset. 20 moves cleanly separates every
       collapsed game (max 16) from every legitimate one seen so far
       (min 42, across both generations' self-play).
+- [x] **Root-caused the collapse further and hardened against it
+      (2026-09-03) — full detail in `docs/SELF_PLAY_STABILITY.md`, this
+      is the summary:** filtering degenerate games wasn't sufficient —
+      fine-tuning on the *cleaned* data still pushed empty-board Pass
+      probability to 24.9%. Four fine-tune attempts (varying only mix
+      ratio and step count, mixing in the broad `batch2.npz` alongside
+      new self-play data via `bootstrap/dataset.py`'s new
+      `build_training_loader`) found a 25%-anchor/75%-self-play ratio,
+      step count matched to the original run's self-play exposure, was
+      both a real win and stable — 50/50 was either a wash or,
+      surprisingly, *worse* with more steps. But chaining that same
+      recipe into a second warm-started generation still collapsed
+      (34.5% Pass) — the real cause is multiplicative bias compounding
+      across chained warm-starts, not the ratio itself. Separately,
+      research into *why* pure win/loss/tie value targets are
+      implicated (AlphaZero's own deliberate choice, but with a known
+      flat-near-saturation failure mode) led to adding a KataGo-style
+      auxiliary score-margin head (`bootstrap/model.py`'s
+      `has_score_head`, training-only, `export/to_tflite.py` strips it)
+      — implemented and verified end to end, not yet evaluated for
+      whether it reduces drift in practice. The warm-start-chaining
+      restructuring (fine-tune from the pristine checkpoint each
+      generation, not the previous candidate) is still an open,
+      unimplemented next step.
 - [ ] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`), not shipped automatically
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate
