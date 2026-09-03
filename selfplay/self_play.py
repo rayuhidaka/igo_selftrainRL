@@ -13,6 +13,15 @@ assuming Phase 2's game counts translate directly.
 Produces the same `bootstrap.dataset.SelfPlayExamples` format Phase 2's `generate.py` did,
 so `bootstrap/train.py` trains on it completely unmodified.
 
+`config["min_moves_to_keep"]` (default 0, no filtering) discards any game shorter than
+this before it's folded into the saved dataset -- guards against a self-play collapse
+artifact seen in practice (2026-09-03, see docs/ROADMAP.md's Phase 3): a fine-tuned
+candidate whose value net hadn't seen an early-pass position developing a small but
+nonzero prior on Pass, which a small `num_simulations` budget can then run away with
+within a single search, ending the game in a handful of moves with whoever benefits from
+komi "winning" a board neither side actually played on. Training on those teaches the
+exact behavior that produced them, compounding worse each generation.
+
 Usage:
     python -m selfplay.self_play --config configs/selfplay_self_play_smoke_test.yaml
 """
@@ -114,10 +123,25 @@ def main() -> None:
     all_policies: list[np.ndarray] = []
     all_values: list[float] = []
 
+    min_moves_to_keep = config.get("min_moves_to_keep", 0)
+    games_discarded = 0
+
     start = time.time()
     games_played = 0
     for game_index in range(config["num_games"]):
         records, winner = play_one_game(mcts, board_size, komi, config["temperature"], config["max_moves"], rng)
+
+        # A real MCTS-searched game ending in only a handful of moves (both players passing
+        # on a near-empty board) is a self-play collapse artifact, not a meaningful outcome
+        # -- almost always both players passing immediately, with whoever benefits from komi
+        # "winning" a board neither of them actually played on. Training on these teaches
+        # the exact behavior that produced them, compounding worse across generations (see
+        # docs/ROADMAP.md's Phase 3) -- discard rather than fold into the saved dataset.
+        if len(records) < min_moves_to_keep:
+            games_discarded += 1
+            print(f"Game {game_index + 1}/{config['num_games']} discarded ({len(records)} moves, too short)")
+            continue
+
         for planes, policy_target, to_play in records:
             if winner is None:
                 z = 0.0
@@ -147,7 +171,10 @@ def main() -> None:
     )
     out_path = Path(config["out_path"])
     examples.save(out_path)
-    print(f"Wrote {len(examples)} training examples from {games_played} games to {out_path}")
+    print(
+        f"Wrote {len(examples)} training examples from {games_played} games to {out_path} "
+        f"({games_discarded} game(s) discarded as too short)"
+    )
 
 
 if __name__ == "__main__":

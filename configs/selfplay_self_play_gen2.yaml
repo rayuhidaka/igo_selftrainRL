@@ -3,6 +3,13 @@
 # (the checkpoint gen1 produced) instead of the original residual
 # checkpoint, so this tests whether improvement compounds across
 # generations -- see docs/ROADMAP.md's Phase 3.
+#
+# min_moves_to_keep added after the first run of this config produced
+# ~30/100 degenerate 2-16-move games (both players passing on a
+# near-empty board -- a self-play collapse artifact, see
+# selfplay/self_play.py's module docstring). 20 sits cleanly between
+# that cluster (max 16 moves) and every legitimate game observed
+# (minimum 42 moves) in both gen1 and this config's own first run.
 
 checkpoint_path: checkpoints/bootstrap_gen1_candidate.pt
 board_size: 9
@@ -14,5 +21,6 @@ max_moves: 200
 num_simulations: 100
 temperature: 1.0
 max_seconds: null
+min_moves_to_keep: 20
 
 out_path: selfplay_games/self_play_gen2.npz
