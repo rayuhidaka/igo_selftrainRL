@@ -101,7 +101,24 @@ scheduling, session length) is still to be decided — revisit when Phase
       and batch1 was exactly as overfit as suspected — it plays no
       better than an untrained net once put in an actual game, despite
       its training loss having dropped much further than batch2's.
-      Not yet exported to `.tflite` — open for next time.
+- [x] **Exported batch2 to `.tflite` (2026-09-03):** `python -m
+      export.to_tflite --checkpoint checkpoints/bootstrap_batch2.pt
+      --board-size 9 --out export/ray_zero_batch2.tflite` — first time
+      this pipeline ran against a real trained checkpoint rather than an
+      untrained placeholder. Tensors match `igo-app/docs/MODEL_CONTRACT.md`
+      exactly (`board_planes [1,9,9,3]` in, `policy [1,82]`/`value [1,1]`
+      out, correctly named). Also numerically verified this time (the
+      placeholder pass only checked shapes): fed one real board position
+      through both the PyTorch checkpoint and the exported `.tflite`,
+      max policy difference ~1e-7 and value difference ~9e-8 — float32
+      rounding noise, not a conversion bug. `export/*.tflite` isn't
+      committed (gitignored, same as `igo-app`'s own model asset) —
+      regenerate from `checkpoints/bootstrap_batch2.pt` via the command
+      above. Not yet copied into `igo-app`'s assets or wired into a
+      difficulty picker — that's a real product decision (this
+      checkpoint is weak/architecture-limited, see above) better made
+      once Phase 3's self-play fine-tuning has actually run, not on this
+      bootstrap checkpoint alone.
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)
