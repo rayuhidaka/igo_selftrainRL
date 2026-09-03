@@ -171,6 +171,25 @@ scheduling, session length) is still to be decided — revisit when Phase
       before (`eval/promote.py`'s `current_tier_channels`/
       `current_tier_num_conv_layers` config keys). 5 new tests
       (`tests/test_checkpoint.py`), full suite (48 tests) passing.
+- [x] **Confirmed the widened net's own ceiling (2026-09-03):**
+      `bootstrap_batch2_wide.pt` was only trained 50 epochs and was still
+      trending down at the end, so its loss plateau wasn't confirmed yet.
+      `configs/bootstrap_train_batch2_wide_long.yaml` — same architecture
+      and data, 141 epochs (495,317 steps, hit the 90-min cap) → first
+      checkpoint through `bootstrap/checkpoint.py`'s new metadata format
+      end to end (`bootstrap_batch2_wide_long.pt`). Loss dropped to
+      ~2.6-2.8 by roughly epoch 20 and then stayed there, noisily, for
+      the remaining ~120 epochs (3x longer training, no further real
+      improvement) — a genuine plateau, not just an under-trained run
+      like the 50-epoch checkpoint looked. 3 conv layers/64 channels is
+      now a confirmed capacity ceiling on this data, not a "just needed
+      more epochs" situation. Next real architecture step (not yet
+      done): a small residual tower (a few residual blocks, still
+      64-96 channels) — the standard, low-export-risk next step for
+      small-board Go nets, preferred over jumping straight to something
+      more exotic (attention/transformer-style blocks, which this
+      repo's own KataGo-conversion notes already flag as fragile through
+      `onnx2tf`).
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)

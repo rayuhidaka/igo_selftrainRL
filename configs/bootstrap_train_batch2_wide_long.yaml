@@ -1,0 +1,28 @@
+# Same architecture and data as configs/bootstrap_train_batch2_wide.yaml
+# (3 conv layers, 64 channels; batch2.npz), just trained much longer --
+# that run was still trending down at epoch 50, not plateaued, so its
+# real ceiling is still unknown. This answers that before deciding
+# whether a bigger architecture change (e.g. a residual tower) is
+# actually needed -- see docs/ROADMAP.md's Phase 2.
+#
+# First real run to go through bootstrap/checkpoint.py's metadata
+# wrapper end to end (batch2_wide.pt itself predates that fix).
+
+board_size: 9
+seed: 9
+channels: 64
+num_conv_layers: 3
+
+checkpoint_out: checkpoints/bootstrap_batch2_wide_long.pt
+data_source: selfplay_games/batch2.npz
+
+batch_size: 64
+learning_rate: 0.001
+epochs: 150
+
+log_dir: runs
+run_name: bootstrap_batch2_wide_long
+log_every_n_steps: 250
+checkpoint_interval_steps: 5000
+
+max_train_seconds: 5400  # ~90 min; ~137 epochs expected at this net's ~89 steps/sec
