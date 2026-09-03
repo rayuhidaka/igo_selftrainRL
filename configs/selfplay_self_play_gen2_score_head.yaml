@@ -1,0 +1,21 @@
+# Generation 2's self-play data using the score-head-equipped gen1
+# candidate -- the real test of whether the auxiliary score head
+# reduces the multiplicative bias compounding seen when chaining
+# warm-starts without it (1.22% -> 34.5% Pass probability across two
+# generations of the same 25/75 recipe -- see docs/SELF_PLAY_STABILITY.md
+# section 5 and 7). Same settings as configs/selfplay_self_play_gen2.yaml
+# otherwise.
+
+checkpoint_path: checkpoints/bootstrap_gen1_candidate_score_head.pt
+board_size: 9
+komi: 7.5
+seed: 20260904
+
+num_games: 100
+max_moves: 200
+num_simulations: 100
+temperature: 1.0
+max_seconds: null
+min_moves_to_keep: 20
+
+out_path: selfplay_games/self_play_gen2_score_head.npz
