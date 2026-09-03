@@ -1,0 +1,20 @@
+# Phase 3's first real (if modest) self-play batch -- generation 1,
+# using bootstrap_batch2_residual.pt (the current best checkpoint) to
+# play against itself via real MCTS search. Not Phase 2's 3000-game
+# scale: self-play is far more expensive per move than distillation
+# (~0.25s/move at these settings vs. generate.py's ~20ms/move, per the
+# timing calibration in configs/selfplay_self_play_timing_test.yaml) --
+# sizing up is easy once this first cycle proves out end to end.
+
+checkpoint_path: checkpoints/bootstrap_batch2_residual.pt
+board_size: 9
+komi: 7.5
+seed: 20260903
+
+num_games: 100
+max_moves: 200
+num_simulations: 100
+temperature: 1.0
+max_seconds: null
+
+out_path: selfplay_games/self_play_gen1.npz

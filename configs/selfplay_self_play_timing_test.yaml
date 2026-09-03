@@ -1,0 +1,17 @@
+# Timing calibration only -- not meant to produce a real training batch.
+# Realistic simulations/move and no early move cap (max_moves matches
+# generate.py's convention), to see actual per-game cost before sizing
+# the first real Phase 3 self-play batch.
+
+checkpoint_path: checkpoints/bootstrap_batch2_residual.pt
+board_size: 9
+komi: 7.5
+seed: 9
+
+num_games: 10
+max_moves: 200
+num_simulations: 100
+temperature: 1.0
+max_seconds: null
+
+out_path: selfplay_games/self_play_timing_test.npz
