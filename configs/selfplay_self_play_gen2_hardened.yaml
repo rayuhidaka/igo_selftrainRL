@@ -1,0 +1,21 @@
+# Same as configs/selfplay_self_play_gen2_score_head.yaml (same source
+# checkpoint, same seed, same everything) but with the new
+# max_mid_game_pass_weight filter added -- testing whether catching
+# mid-game Pass bias (not just outright-short games) produces cleaner
+# training data and, downstream, a more stable + still-effective
+# fine-tune. See docs/SELF_PLAY_STABILITY.md's open items.
+
+checkpoint_path: checkpoints/bootstrap_gen1_candidate_score_head.pt
+board_size: 9
+komi: 7.5
+seed: 20260904
+
+num_games: 100
+max_moves: 200
+num_simulations: 100
+temperature: 1.0
+max_seconds: null
+min_moves_to_keep: 20
+max_mid_game_pass_weight: 0.5
+
+out_path: selfplay_games/self_play_gen2_hardened.npz
