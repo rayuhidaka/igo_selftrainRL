@@ -22,10 +22,18 @@ from bootstrap.model import RayZeroNet
 from engine.move import Pass, Play
 from engine.point import Point
 from mcts.mcts import Mcts, MctsConfig
-from selfplay.self_play import play_one_game, visit_count_policy
+from selfplay.self_play import has_suspicious_mid_game_pass, play_one_game, visit_count_policy
 
 _BOARD_SIZE = 5
 _NUM_SIMULATIONS = 8
+_POLICY_SIZE = _BOARD_SIZE * _BOARD_SIZE + 1
+
+
+def _record_with_pass_weight(pass_weight: float) -> tuple[None, np.ndarray, None]:
+    policy_target = np.zeros(_POLICY_SIZE, dtype=np.float32)
+    policy_target[-1] = pass_weight
+    policy_target[0] = 1.0 - pass_weight
+    return (None, policy_target, None)
 
 
 class VisitCountPolicyTest(unittest.TestCase):
@@ -46,6 +54,24 @@ class VisitCountPolicyTest(unittest.TestCase):
         self.assertAlmostEqual(float(policy.sum()), 1.0, places=5)
         self.assertAlmostEqual(float(policy[Point(0, 0).to_index(_BOARD_SIZE)]), 0.5)
         self.assertAlmostEqual(float(policy[_BOARD_SIZE * _BOARD_SIZE]), 0.5)
+
+
+class HasSuspiciousMidGamePassTest(unittest.TestCase):
+    def test_false_when_every_non_terminal_position_has_low_pass_weight(self) -> None:
+        records = [_record_with_pass_weight(0.01) for _ in range(10)]
+        self.assertFalse(has_suspicious_mid_game_pass(records, threshold=0.5))
+
+    def test_true_when_a_non_terminal_position_exceeds_the_threshold(self) -> None:
+        records = [_record_with_pass_weight(0.01) for _ in range(5)]
+        records.insert(2, _record_with_pass_weight(0.9))  # well before the final two
+        self.assertTrue(has_suspicious_mid_game_pass(records, threshold=0.5))
+
+    def test_ignores_the_final_two_positions_even_with_high_pass_weight(self) -> None:
+        # Legitimate: these precede the game's own closing double-pass.
+        records = [_record_with_pass_weight(0.01) for _ in range(5)]
+        records[-1] = _record_with_pass_weight(0.99)
+        records[-2] = _record_with_pass_weight(0.95)
+        self.assertFalse(has_suspicious_mid_game_pass(records, threshold=0.5))
 
 
 class PlayOneGameTest(unittest.TestCase):

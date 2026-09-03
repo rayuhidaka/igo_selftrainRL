@@ -22,6 +22,14 @@ within a single search, ending the game in a handful of moves with whoever benef
 komi "winning" a board neither side actually played on. Training on those teaches the
 exact behavior that produced them, compounding worse each generation.
 
+`config["max_mid_game_pass_weight"]` (default `None`, no filtering) hardens this further
+(2026-09-03, see docs/SELF_PLAY_STABILITY.md's open items): a game long enough to survive
+`min_moves_to_keep` can still contain a *non-terminal* position where search assigned Pass
+most of its visit weight for the same underlying reason, without that single move actually
+ending the game outright -- length alone doesn't catch it. Discards any game where a
+recorded position outside the final two (which legitimately precede the game's own closing
+double-pass, and are supposed to favor Pass heavily) exceeds this Pass-weight threshold.
+
 Usage:
     python -m selfplay.self_play --config configs/selfplay_self_play_smoke_test.yaml
 """
@@ -69,6 +77,22 @@ def visit_count_policy(board_size: int, move_visits: dict[Move, int]) -> np.ndar
     else:
         vector /= total
     return vector
+
+
+def has_suspicious_mid_game_pass(
+    records: list[tuple[np.ndarray, np.ndarray, Stone]], threshold: float
+) -> bool:
+    """True if any recorded position *outside the final two* assigned Pass more than
+    `threshold` of the search's visit weight. The final two positions are excluded because
+    they legitimately precede the game's own closing double-pass (see `play_one_game`'s
+    loop condition) -- search correctly favoring Pass there is expected, not a problem.
+    A high Pass weight anywhere earlier signals the same self-play collapse dynamic
+    `min_moves_to_keep` guards against, just one that didn't end the game outright.
+    """
+    for _, policy_target, _ in records[:-2]:
+        if policy_target[-1] > threshold:
+            return True
+    return False
 
 
 def play_one_game(
@@ -126,7 +150,9 @@ def main() -> None:
     all_scores: list[float] = []
 
     min_moves_to_keep = config.get("min_moves_to_keep", 0)
-    games_discarded = 0
+    max_mid_game_pass_weight = config.get("max_mid_game_pass_weight")
+    games_discarded_short = 0
+    games_discarded_pass_bias = 0
 
     start = time.time()
     games_played = 0
@@ -142,8 +168,17 @@ def main() -> None:
         # the exact behavior that produced them, compounding worse across generations (see
         # docs/ROADMAP.md's Phase 3) -- discard rather than fold into the saved dataset.
         if len(records) < min_moves_to_keep:
-            games_discarded += 1
+            games_discarded_short += 1
             print(f"Game {game_index + 1}/{config['num_games']} discarded ({len(records)} moves, too short)")
+            continue
+
+        # A longer game can still contain the same collapse dynamic without it ending the
+        # game outright -- see has_suspicious_mid_game_pass's docstring.
+        if max_mid_game_pass_weight is not None and has_suspicious_mid_game_pass(
+            records, max_mid_game_pass_weight
+        ):
+            games_discarded_pass_bias += 1
+            print(f"Game {game_index + 1}/{config['num_games']} discarded (elevated mid-game Pass weight)")
             continue
 
         for planes, policy_target, to_play in records:
@@ -179,7 +214,8 @@ def main() -> None:
     examples.save(out_path)
     print(
         f"Wrote {len(examples)} training examples from {games_played} games to {out_path} "
-        f"({games_discarded} game(s) discarded as too short)"
+        f"({games_discarded_short} discarded as too short, "
+        f"{games_discarded_pass_bias} discarded for elevated mid-game Pass weight)"
     )
 
 
