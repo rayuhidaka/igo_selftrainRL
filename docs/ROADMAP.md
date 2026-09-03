@@ -254,6 +254,25 @@ scheduling, session length) is still to be decided — revisit when Phase
       single generation on one fairly small self-play batch is real
       signal, not yet proof this compounds over multiple generations —
       that's the natural next step, not yet done.
+- [x] **Caught and guarded against a self-play collapse (2026-09-03):**
+      generating generation 2's self-play data (with
+      `bootstrap_gen1_candidate.pt`) produced ~30/100 games ending in
+      2-16 moves — both players passing on a near-empty board, White
+      "winning" purely from komi. Didn't exist in generation 1's
+      self-play (1/100 short games, using the pre-fine-tune checkpoint).
+      Diagnosed: fine-tuning flattened the policy enough (empty-board
+      top-move confidence 16.5% → 6.6%) that Pass picked up a small but
+      nonzero prior (0.01% → 1.7%) — small in isolation, but enough that
+      a 100-simulation search budget can run away with it in a single
+      tree search once the value net (which has barely seen post-pass
+      positions) misjudges that branch. Training on these games would
+      have taught the exact behavior that produced them, worse each
+      generation — a real self-play death spiral, not just noisy data.
+      Fixed with `selfplay/self_play.py`'s new `min_moves_to_keep`
+      config key: discards any game shorter than the threshold before
+      it reaches the saved dataset. 20 moves cleanly separates every
+      collapsed game (max 16) from every legitimate one seen so far
+      (min 42, across both generations' self-play).
 - [ ] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`), not shipped automatically
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate
