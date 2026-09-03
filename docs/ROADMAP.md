@@ -299,11 +299,22 @@ scheduling, session length) is still to be decided — revisit when Phase
       same magnitude as without the head, 1.22%→34.5%). Useful negative
       result — rules out value-target flatness as the chaining
       collapse's primary cause. Keeping the score head (real signal, no
-      downside) but it isn't a fix for this failure mode. The
-      warm-start-chaining restructuring (fine-tune from the pristine
-      checkpoint each generation, not the previous candidate, mixing in
-      all accumulated self-play data) is now the priority next step —
-      see `docs/SELF_PLAY_STABILITY.md` sections 5 and 8.
+      downside) but it isn't a fix for this failure mode. Implemented
+      the warm-start-chaining restructuring next (fine-tune from the
+      pristine checkpoint each generation, mixing in all accumulated
+      self-play data — needed no new code, `bootstrap/dataset.py`'s
+      existing weighted multi-source mixing already supports it):
+      **partial fix.** Empty-board Pass probability came down to 16.09%
+      (vs. 27-34% chained), but the checkpoint was no longer a clear
+      strength win either (1491.8 vs 1508.2 vs. the pristine baseline,
+      "Do not promote" — a statistical wash, not the decisive 40-0 win
+      every single-generation fine-tune produced). Trading one problem
+      for another, not a full solution. Full detail and live next-step
+      options in `docs/SELF_PLAY_STABILITY.md` section 9 — pausing here
+      to decide direction (harden self-play data quality further,
+      retune the mix, move to a true continuous replay-buffer loop, or
+      accept the single-generation result as Phase 3's current
+      deliverable) rather than keep varying parameters blindly.
 - [ ] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`), not shipped automatically
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate
