@@ -96,12 +96,15 @@ def convert(
     out_path: Path,
     channels: int | None = None,
     num_conv_layers: int | None = None,
+    num_residual_blocks: int | None = None,
 ) -> bytes:
-    # channels/num_conv_layers only need supplying for a legacy checkpoint
-    # (saved before bootstrap/checkpoint.py existed) or to deliberately
-    # override -- see bootstrap/checkpoint.py's build_model.
+    # channels/num_conv_layers/num_residual_blocks only need supplying for a
+    # legacy checkpoint (saved before bootstrap/checkpoint.py existed) or to
+    # deliberately override -- see bootstrap/checkpoint.py's build_model.
     state_dict, metadata = (None, None) if checkpoint is None else load_checkpoint(checkpoint)
-    model = build_model(metadata, board_size, channels=channels, num_conv_layers=num_conv_layers)
+    model = build_model(
+        metadata, board_size, channels=channels, num_conv_layers=num_conv_layers, num_residual_blocks=num_residual_blocks
+    )
     if state_dict is not None:
         model.load_state_dict(state_dict)
     model.eval()
@@ -142,9 +145,14 @@ def main() -> None:
     parser.add_argument(
         "--num-conv-layers", type=int, default=None, help="Only needed for a legacy checkpoint or to override"
     )
+    parser.add_argument(
+        "--num-residual-blocks", type=int, default=None, help="Only needed for a legacy checkpoint or to override"
+    )
     args = parser.parse_args()
 
-    tflite_bytes = convert(args.checkpoint, args.board_size, args.out, args.channels, args.num_conv_layers)
+    tflite_bytes = convert(
+        args.checkpoint, args.board_size, args.out, args.channels, args.num_conv_layers, args.num_residual_blocks
+    )
     print(f"Wrote {args.out} ({len(tflite_bytes)} bytes)")
 
     interpreter = tf.lite.Interpreter(model_content=tflite_bytes)

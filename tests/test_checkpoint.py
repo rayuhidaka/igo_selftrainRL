@@ -65,6 +65,17 @@ class BuildModelTest(unittest.TestCase):
         self.assertEqual(model.conv1.out_channels, default_model.conv1.out_channels)
         self.assertEqual(hasattr(model, "conv3"), hasattr(default_model, "conv3"))
 
+    def test_uses_metadatas_residual_block_count_when_no_explicit_override_is_given(self) -> None:
+        metadata = CheckpointMetadata(board_size=_BOARD_SIZE, channels=8, num_conv_layers=3, num_residual_blocks=2)
+        model = build_model(metadata, _BOARD_SIZE)
+        self.assertEqual(len(model.residual_blocks), 2)
+        self.assertFalse(hasattr(model, "conv1"))
+
+    def test_an_explicit_residual_block_override_wins_over_metadata(self) -> None:
+        metadata = CheckpointMetadata(board_size=_BOARD_SIZE, channels=8, num_conv_layers=3, num_residual_blocks=0)
+        model = build_model(metadata, _BOARD_SIZE, num_residual_blocks=2)
+        self.assertEqual(len(model.residual_blocks), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -49,6 +49,7 @@ def _metadata_from_config(config: dict) -> CheckpointMetadata:
         board_size=config["board_size"],
         channels=config.get("channels", 64),
         num_conv_layers=config.get("num_conv_layers", 3),
+        num_residual_blocks=config.get("num_residual_blocks", 0),
         data_source=config.get("data_source"),
         seed=config["seed"],
     )
@@ -118,7 +119,13 @@ def main() -> None:
     torch.manual_seed(config["seed"])
     channels = config.get("channels", 64)
     num_conv_layers = config.get("num_conv_layers", 3)
-    model = RayZeroNet(board_size=config["board_size"], channels=channels, num_conv_layers=num_conv_layers)
+    num_residual_blocks = config.get("num_residual_blocks", 0)
+    model = RayZeroNet(
+        board_size=config["board_size"],
+        channels=channels,
+        num_conv_layers=num_conv_layers,
+        num_residual_blocks=num_residual_blocks,
+    )
 
     if config.get("data_source"):
         train(model, config, monitor)

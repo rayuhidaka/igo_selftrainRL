@@ -39,6 +39,7 @@ class CheckpointMetadata:
     board_size: int
     channels: int
     num_conv_layers: int
+    num_residual_blocks: int = 0
     data_source: Optional[str] = None
     seed: Optional[int] = None
     elo: Optional[float] = None
@@ -65,18 +66,26 @@ def build_model(
     board_size: int,
     channels: Optional[int] = None,
     num_conv_layers: Optional[int] = None,
+    num_residual_blocks: Optional[int] = None,
 ) -> RayZeroNet:
     """Constructs the `RayZeroNet` a checkpoint needs: an explicit `channels`/
-    `num_conv_layers` always wins (for a legacy checkpoint, or to deliberately override),
-    otherwise `metadata`'s own values, otherwise `RayZeroNet`'s current defaults.
+    `num_conv_layers`/`num_residual_blocks` always wins (for a legacy checkpoint, or to
+    deliberately override), otherwise `metadata`'s own values, otherwise `RayZeroNet`'s
+    current defaults.
     """
-    resolved_channels = channels if channels is not None else (metadata.channels if metadata else None)
-    resolved_num_conv_layers = (
-        num_conv_layers if num_conv_layers is not None else (metadata.num_conv_layers if metadata else None)
-    )
+
+    def resolve(explicit: Optional[int], metadata_field: str) -> Optional[int]:
+        if explicit is not None:
+            return explicit
+        return getattr(metadata, metadata_field) if metadata else None
+
     kwargs = {}
-    if resolved_channels is not None:
-        kwargs["channels"] = resolved_channels
-    if resolved_num_conv_layers is not None:
-        kwargs["num_conv_layers"] = resolved_num_conv_layers
+    for arg, metadata_field in [
+        (channels, "channels"),
+        (num_conv_layers, "num_conv_layers"),
+        (num_residual_blocks, "num_residual_blocks"),
+    ]:
+        resolved = resolve(arg, metadata_field)
+        if resolved is not None:
+            kwargs[metadata_field] = resolved
     return RayZeroNet(board_size=board_size, **kwargs)

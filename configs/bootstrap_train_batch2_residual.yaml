@@ -1,0 +1,27 @@
+# Residual-tower architecture test -- same data and channel width as
+# configs/bootstrap_train_batch2_wide_long.yaml, whose plain 3-conv/64ch
+# stack was confirmed capacity-limited (loss plateaued ~2.6-2.8 across
+# 141 epochs, no further improvement past ~epoch 20). This tests whether
+# skip connections (bootstrap/model.py's ResidualBlock) let the net use
+# capacity more effectively at the same width -- see docs/ROADMAP.md's
+# Phase 2 and docs/ARCHITECTURE.md for why a small residual tower, not a
+# bigger architecture change, is the next step being tried.
+
+board_size: 9
+seed: 9
+channels: 64
+num_residual_blocks: 4   # stem + 4 residual blocks; num_conv_layers unused on this path
+
+checkpoint_out: checkpoints/bootstrap_batch2_residual.pt
+data_source: selfplay_games/batch2.npz
+
+batch_size: 64
+learning_rate: 0.001
+epochs: 150
+
+log_dir: runs
+run_name: bootstrap_batch2_residual
+log_every_n_steps: 250
+checkpoint_interval_steps: 5000
+
+max_train_seconds: 5400  # same 90-min budget as bootstrap_train_batch2_wide_long.yaml

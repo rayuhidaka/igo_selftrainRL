@@ -30,16 +30,24 @@ class RayZeroPolicyValueNet:
         board_size: int,
         channels: Optional[int] = None,
         num_conv_layers: Optional[int] = None,
+        num_residual_blocks: Optional[int] = None,
     ) -> None:
-        # `channels`/`num_conv_layers` only need supplying explicitly for a
-        # *legacy* checkpoint (saved before bootstrap/checkpoint.py existed,
-        # so its architecture isn't recorded anywhere) or to deliberately
-        # override -- a checkpoint saved via bootstrap/checkpoint.py carries
-        # its own architecture and gets it right automatically. See
-        # bootstrap/checkpoint.py's module docstring for why this exists.
+        # `channels`/`num_conv_layers`/`num_residual_blocks` only need
+        # supplying explicitly for a *legacy* checkpoint (saved before
+        # bootstrap/checkpoint.py existed, so its architecture isn't recorded
+        # anywhere) or to deliberately override -- a checkpoint saved via
+        # bootstrap/checkpoint.py carries its own architecture and gets it
+        # right automatically. See bootstrap/checkpoint.py's module docstring
+        # for why this exists.
         self.board_size = board_size
         state_dict, metadata = (None, None) if checkpoint is None else load_checkpoint(checkpoint)
-        self.model = build_model(metadata, board_size, channels=channels, num_conv_layers=num_conv_layers)
+        self.model = build_model(
+            metadata,
+            board_size,
+            channels=channels,
+            num_conv_layers=num_conv_layers,
+            num_residual_blocks=num_residual_blocks,
+        )
         if state_dict is not None:
             self.model.load_state_dict(state_dict)
         self.model.eval()

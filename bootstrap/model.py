@@ -5,19 +5,43 @@ a drop-in replacement for igo-app's expert-tier checkpoint from the app's
 side -- see docs/ARCHITECTURE.md for the full contract and why history/komi
 aren't inputs here.
 
-Widened from the original 2-conv-layer/32-channel placeholder (2026-09-03):
-`bootstrap_batch2.pt` (3000 games, 224,730 examples) plateaued in training
-loss around epoch 25 rather than continuing to fall, suggesting the
-original size had hit a capacity ceiling on real data rather than a data
-ceiling -- see docs/ROADMAP.md's Phase 2. This version (3 conv layers,
-64 channels) is the first attempt at testing that theory; still not
-seriously tuned.
+Architecture history (see docs/ROADMAP.md's Phase 2 for the full story):
+2 conv layers/32 channels (original placeholder) -> 3 layers/64 channels
+(2026-09-03, confirmed the original had hit a capacity ceiling on real
+data) -> confirmed the 3-layer net has its own ceiling too (141 epochs,
+no further improvement past ~epoch 20) -> a small residual tower
+(`num_residual_blocks > 0`), the standard next step for small-board Go
+nets, tested here for the first time. `num_conv_layers` only matters when
+`num_residual_blocks == 0` (the plain-stack path); both exist so a
+checkpoint from any point in that history stays loadable -- see
+bootstrap/checkpoint.py.
 """
 
 from __future__ import annotations
 
 import torch
 from torch import nn
+
+
+class ResidualBlock(nn.Module):
+    """One AlphaZero/KataGo-style residual block: two 3x3 convs (each followed by
+    BatchNorm), a skip connection back to the block's input, then a final ReLU. Channel
+    count is preserved end to end, which is what makes the skip-add valid without a
+    projection layer.
+    """
+
+    def __init__(self, channels: int) -> None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        y = torch.relu(self.bn1(self.conv1(x)))
+        y = self.bn2(self.conv2(y))
+        return torch.relu(y + residual)
 
 
 class RayZeroNet(nn.Module):
@@ -41,21 +65,27 @@ class RayZeroNet(nn.Module):
         player to move (`+1` certain win, `-1` certain loss, `0` even).
     """
 
-    def __init__(self, board_size: int = 9, channels: int = 64, num_conv_layers: int = 3) -> None:
-        # num_conv_layers exists so a checkpoint saved before the 2->3-layer
-        # widening (see this file's module docstring) can still be
-        # reconstructed for loading (num_conv_layers=2) -- it's not a knob
-        # meant for new checkpoints going forward. conv1/conv2/conv3 stay
-        # named attributes rather than an nn.ModuleList specifically so
-        # existing state_dict keys ("conv1.weight", ...) keep working.
+    def __init__(
+        self, board_size: int = 9, channels: int = 64, num_conv_layers: int = 3, num_residual_blocks: int = 0
+    ) -> None:
+        # conv1/conv2/conv3 and residual_blocks stay named/ModuleList attributes matching
+        # exactly what each architecture generation was actually saved with -- see this
+        # file's module docstring and bootstrap/checkpoint.py -- so existing state_dict
+        # keys keep working for whichever generation a checkpoint came from.
         super().__init__()
         self.board_size = board_size
         self.num_conv_layers = num_conv_layers
+        self.num_residual_blocks = num_residual_blocks
 
-        self.conv1 = nn.Conv2d(3, channels, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
-        if num_conv_layers >= 3:
-            self.conv3 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        if num_residual_blocks > 0:
+            self.stem_conv = nn.Conv2d(3, channels, kernel_size=3, padding=1)
+            self.stem_bn = nn.BatchNorm2d(channels)
+            self.residual_blocks = nn.ModuleList(ResidualBlock(channels) for _ in range(num_residual_blocks))
+        else:
+            self.conv1 = nn.Conv2d(3, channels, kernel_size=3, padding=1)
+            self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+            if num_conv_layers >= 3:
+                self.conv3 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
 
         self.policy_conv = nn.Conv2d(channels, 2, kernel_size=1)
         self.policy_fc = nn.Linear(2 * board_size * board_size, board_size * board_size)
@@ -65,10 +95,15 @@ class RayZeroNet(nn.Module):
         self.value_fc2 = nn.Linear(channels, 1)
 
     def forward(self, board_planes: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        x = torch.relu(self.conv1(board_planes))
-        x = torch.relu(self.conv2(x))
-        if self.num_conv_layers >= 3:
-            x = torch.relu(self.conv3(x))
+        if self.num_residual_blocks > 0:
+            x = torch.relu(self.stem_bn(self.stem_conv(board_planes)))
+            for block in self.residual_blocks:
+                x = block(x)
+        else:
+            x = torch.relu(self.conv1(board_planes))
+            x = torch.relu(self.conv2(x))
+            if self.num_conv_layers >= 3:
+                x = torch.relu(self.conv3(x))
 
         policy_map = torch.relu(self.policy_conv(x))
         policy_points = self.policy_fc(torch.flatten(policy_map, start_dim=1))

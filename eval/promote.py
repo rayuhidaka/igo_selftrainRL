@@ -39,6 +39,8 @@ def main() -> None:
         channels_b=config.get("current_tier_channels"),
         num_conv_layers_a=config.get("candidate_num_conv_layers"),
         num_conv_layers_b=config.get("current_tier_num_conv_layers"),
+        num_residual_blocks_a=config.get("candidate_num_residual_blocks"),
+        num_residual_blocks_b=config.get("current_tier_num_residual_blocks"),
     )
     candidate_rating, tier_rating = update_ratings(DEFAULT_INITIAL_RATING, DEFAULT_INITIAL_RATING, results)
 
