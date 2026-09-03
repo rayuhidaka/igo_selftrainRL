@@ -31,8 +31,20 @@ from bootstrap.inference import encode_planes
 from engine.move import Move, Pass, Play
 from engine.point import Point
 from engine.position import Position
-from engine.scoring import area_score
+from engine.scoring import AreaScore, area_score
 from engine.stone import Stone
+
+
+def score_margin(area: AreaScore, komi: float, to_play: Stone, board_size: int) -> float:
+    """Final score margin from `to_play`'s perspective, normalized by `board_size**2` --
+    positive means `to_play` ended up ahead. Trains RayZeroNet's auxiliary score head (see
+    its module docstring): richer signal than the win/loss/tie `z` target alone, which can't
+    distinguish a decisive win from a narrow one -- implicated in a real self-play collapse
+    (see docs/SELF_PLAY_STABILITY.md).
+    """
+    black_margin = area.black - (area.white + komi)
+    margin = black_margin if to_play == Stone.BLACK else -black_margin
+    return margin / (board_size * board_size)
 
 
 class KataGoNet:
@@ -103,9 +115,9 @@ def sample_move(size: int, policy: np.ndarray, temperature: float, rng: random.R
 
 def play_one_game(
     net: KataGoNet, board_size: int, komi: float, temperature: float, max_moves: int, rng: random.Random
-) -> tuple[list[tuple[np.ndarray, np.ndarray, Stone]], "Stone | None"]:
-    """Plays one self-play game and returns `(records, winner)`, where `records` has one
-    `(board_planes, policy_target, to_play)` tuple per move played.
+) -> tuple[list[tuple[np.ndarray, np.ndarray, Stone]], "Stone | None", AreaScore]:
+    """Plays one self-play game and returns `(records, winner, final_area)`, where `records`
+    has one `(board_planes, policy_target, to_play)` tuple per move played.
     """
     position = Position.empty(board_size)
     records: list[tuple[np.ndarray, np.ndarray, Stone]] = []
@@ -119,8 +131,9 @@ def play_one_game(
         position = position.play(move)
         moves_played += 1
 
-    winner = area_score(position).winner(komi)
-    return records, winner
+    final_area = area_score(position)
+    winner = final_area.winner(komi)
+    return records, winner, final_area
 
 
 def main() -> None:
@@ -135,11 +148,12 @@ def main() -> None:
     all_planes: list[np.ndarray] = []
     all_policies: list[np.ndarray] = []
     all_values: list[float] = []
+    all_scores: list[float] = []
 
     start = time.time()
     games_played = 0
     for game_index in range(config["num_games"]):
-        records, winner = play_one_game(
+        records, winner, final_area = play_one_game(
             net, config["board_size"], config["komi"], config["temperature"], config["max_moves"], rng
         )
         for planes, policy_target, to_play in records:
@@ -152,6 +166,7 @@ def main() -> None:
             all_planes.append(planes)
             all_policies.append(policy_target)
             all_values.append(z)
+            all_scores.append(score_margin(final_area, config["komi"], to_play, config["board_size"]))
 
         games_played += 1
         elapsed = time.time() - start
@@ -168,6 +183,7 @@ def main() -> None:
         board_planes=np.stack(all_planes).astype(np.float32),
         policy_targets=np.stack(all_policies).astype(np.float32),
         value_targets=np.array(all_values, dtype=np.float32),
+        score_margin_targets=np.array(all_scores, dtype=np.float32),
     )
     out_path = Path(config["out_path"])
     examples.save(out_path)

@@ -45,6 +45,30 @@ class BuildModelTest(unittest.TestCase):
         for key, value in source_model.state_dict().items():
             self.assertTrue(torch.equal(value, warm_started_model.state_dict()[key]))
 
+    def test_warm_starting_can_add_a_score_head_the_source_checkpoint_never_had(self) -> None:
+        # The actual use case this exists for: adding bootstrap/model.py's auxiliary score
+        # head to an existing, already-trained checkpoint via init_from_checkpoint, not
+        # retraining from scratch. Its weights are absent from the source state_dict and
+        # must come out freshly initialized, not crash the load.
+        source_model = RayZeroNet(board_size=_BOARD_SIZE, channels=6, num_residual_blocks=2)
+        metadata = CheckpointMetadata(board_size=_BOARD_SIZE, channels=6, num_conv_layers=3, num_residual_blocks=2)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint_path = Path(tmp) / "source.pt"
+            save_checkpoint(source_model, metadata, checkpoint_path)
+
+            config = {
+                "board_size": _BOARD_SIZE,
+                "init_from_checkpoint": str(checkpoint_path),
+                "has_score_head": True,
+            }
+            warm_started_model = _build_model(config)
+
+        self.assertTrue(warm_started_model.has_score_head)
+        self.assertTrue(hasattr(warm_started_model, "score_fc1"))
+        # The trunk transferred correctly; only the new head is freshly initialized.
+        self.assertTrue(torch.equal(source_model.stem_conv.weight, warm_started_model.stem_conv.weight))
+
 
 class MetadataFromModelAndConfigTest(unittest.TestCase):
     def test_records_the_models_actual_architecture_and_the_warm_start_source(self) -> None:

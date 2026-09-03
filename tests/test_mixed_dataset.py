@@ -25,6 +25,7 @@ def _write_examples(path: Path, count: int, value_fill: float) -> None:
         policy_targets=np.full((count, _POLICY_SIZE), 1.0 / _POLICY_SIZE, dtype=np.float32),
         # value_targets distinguishes which source an example came from, for the mixing test.
         value_targets=np.full((count,), value_fill, dtype=np.float32),
+        score_margin_targets=np.zeros((count,), dtype=np.float32),
     )
     examples.save(path)
 
@@ -38,7 +39,7 @@ class BuildTrainingLoaderTest(unittest.TestCase):
             loader, total = build_training_loader([(path, 1.0)], batch_size=4)
 
         self.assertEqual(total, 20)
-        for _, _, value_targets in loader:
+        for _, _, value_targets, _ in loader:
             self.assertTrue((value_targets == 1.0).all())
 
     def test_mixes_sources_by_weight_independent_of_their_relative_sizes(self) -> None:
@@ -51,7 +52,7 @@ class BuildTrainingLoaderTest(unittest.TestCase):
             loader, total = build_training_loader([(large_path, 0.5), (small_path, 0.5)], batch_size=64)
 
             all_values = []
-            for _, _, value_targets in loader:
+            for _, _, value_targets, _ in loader:
                 all_values.extend(value_targets.tolist())
 
         self.assertEqual(total, 1020)

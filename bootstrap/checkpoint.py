@@ -40,6 +40,10 @@ class CheckpointMetadata:
     channels: int
     num_conv_layers: int
     num_residual_blocks: int = 0
+    has_score_head: bool = False
+    """Whether this checkpoint's RayZeroNet has the auxiliary score-margin regression head
+    (see bootstrap/model.py's module docstring) -- False for every checkpoint before
+    2026-09-03."""
     data_source: Optional[str] = None
     seed: Optional[int] = None
     elo: Optional[float] = None
@@ -72,14 +76,15 @@ def build_model(
     channels: Optional[int] = None,
     num_conv_layers: Optional[int] = None,
     num_residual_blocks: Optional[int] = None,
+    has_score_head: Optional[bool] = None,
 ) -> RayZeroNet:
     """Constructs the `RayZeroNet` a checkpoint needs: an explicit `channels`/
-    `num_conv_layers`/`num_residual_blocks` always wins (for a legacy checkpoint, or to
-    deliberately override), otherwise `metadata`'s own values, otherwise `RayZeroNet`'s
-    current defaults.
+    `num_conv_layers`/`num_residual_blocks`/`has_score_head` always wins (for a legacy
+    checkpoint, or to deliberately override), otherwise `metadata`'s own values, otherwise
+    `RayZeroNet`'s current defaults.
     """
 
-    def resolve(explicit: Optional[int], metadata_field: str) -> Optional[int]:
+    def resolve(explicit, metadata_field: str):
         if explicit is not None:
             return explicit
         return getattr(metadata, metadata_field) if metadata else None
@@ -89,6 +94,7 @@ def build_model(
         (channels, "channels"),
         (num_conv_layers, "num_conv_layers"),
         (num_residual_blocks, "num_residual_blocks"),
+        (has_score_head, "has_score_head"),
     ]:
         resolved = resolve(arg, metadata_field)
         if resolved is not None:

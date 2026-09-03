@@ -1,0 +1,23 @@
+# Smoke test for bootstrap/model.py's auxiliary score head end to end:
+# training with has_score_head=True, then export/to_tflite.py should
+# still produce a plain policy+value .tflite (the score head is
+# training-only, see its module docstring).
+
+katago_tflite_path: N/A
+board_size: 9
+seed: 9
+has_score_head: true
+
+checkpoint_out: checkpoints/bootstrap_smoke_test_score_head.pt
+data_source: selfplay_games/smoke_test.npz
+
+batch_size: 32
+learning_rate: 0.001
+epochs: 3
+
+log_dir: runs
+run_name: bootstrap_smoke_test_score_head
+log_every_n_steps: 5
+checkpoint_interval_steps: 100
+
+max_train_seconds: 60

@@ -65,6 +65,7 @@ def _metadata_from_model_and_config(model: RayZeroNet, config: dict) -> Checkpoi
         channels=model.channels,
         num_conv_layers=model.num_conv_layers,
         num_residual_blocks=model.num_residual_blocks,
+        has_score_head=model.has_score_head,
         data_source=_data_source_summary(config.get("data_source")),
         seed=config["seed"],
         init_from_checkpoint=config.get("init_from_checkpoint"),
@@ -96,11 +97,15 @@ def _build_model(config: dict) -> RayZeroNet:
             channels=config.get("channels", 64),
             num_conv_layers=config.get("num_conv_layers", 3),
             num_residual_blocks=config.get("num_residual_blocks", 0),
+            has_score_head=config.get("has_score_head", False),
         )
     # Warm start (Phase 3's self-play fine-tuning, see docs/ROADMAP.md): continue training
     # an existing checkpoint instead of a fresh, randomly-initialized network. channels/
-    # num_conv_layers/num_residual_blocks in config only need setting if init_from_checkpoint
-    # is a legacy checkpoint with no recorded architecture -- see build_model's docstring.
+    # num_conv_layers/num_residual_blocks/has_score_head in config only need setting if
+    # init_from_checkpoint is a legacy checkpoint with no recorded architecture -- see
+    # build_model's docstring. Loading with strict=False since adding has_score_head to an
+    # existing (non-score-head) checkpoint means the new score_fc1/score_fc2 weights are
+    # intentionally absent from the source state_dict -- they start freshly initialized.
     state_dict, metadata = load_checkpoint(Path(init_from_checkpoint))
     model = build_model(
         metadata,
@@ -108,8 +113,9 @@ def _build_model(config: dict) -> RayZeroNet:
         channels=config.get("channels"),
         num_conv_layers=config.get("num_conv_layers"),
         num_residual_blocks=config.get("num_residual_blocks"),
+        has_score_head=config.get("has_score_head"),
     )
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
     return model
 
 
@@ -121,17 +127,27 @@ def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor) -> None:
     max_train_seconds = config.get("max_train_seconds")
     checkpoint_out = Path(config["checkpoint_out"])
     metadata = _metadata_from_model_and_config(model, config)
+    # Kept low relative to policy/value -- this is meant to regularize the value head
+    # against saturating flat near +-1 (see bootstrap/model.py's module docstring and
+    # docs/SELF_PLAY_STABILITY.md), not to make the network chase score margin the way
+    # AlphaGo found actively harmful when done directly.
+    score_loss_weight = config.get("score_loss_weight", 0.15)
 
     start = time.time()
     step = 0
     for epoch in range(config["epochs"]):
-        for board_planes, policy_targets, value_targets in loader:
-            predicted_policy, predicted_value = model(board_planes)
+        for board_planes, policy_targets, value_targets, score_margin_targets in loader:
+            predicted_policy, predicted_value, predicted_score = model(board_planes)
 
             # Cross-entropy against a soft (distribution, not single-label) policy target.
             policy_loss = -(policy_targets * torch.log(predicted_policy + 1e-8)).sum(dim=1).mean()
             value_loss = torch.nn.functional.mse_loss(predicted_value.squeeze(-1), value_targets)
             loss = policy_loss + value_loss
+
+            score_loss = None
+            if predicted_score is not None:
+                score_loss = torch.nn.functional.mse_loss(predicted_score.squeeze(-1), score_margin_targets)
+                loss = loss + score_loss_weight * score_loss
 
             optimizer.zero_grad()
             loss.backward()
@@ -141,6 +157,8 @@ def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor) -> None:
             if step % config["log_every_n_steps"] == 0:
                 monitor.log_scalar("loss/policy", policy_loss.item(), step)
                 monitor.log_scalar("loss/value", value_loss.item(), step)
+                if score_loss is not None:
+                    monitor.log_scalar("loss/score_margin", score_loss.item(), step)
                 monitor.log_scalar("loss/total", loss.item(), step)
 
             if step % config["checkpoint_interval_steps"] == 0:

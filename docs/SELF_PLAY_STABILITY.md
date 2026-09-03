@@ -149,12 +149,46 @@ restructuring from section 5. A better-calibrated value signal might
 reduce how much a single fine-tune drifts in the first place, which
 would change how much (if any) of that restructuring is still needed.
 
+### 7. Score-margin auxiliary head implemented (2026-09-03)
+
+Added `bootstrap/model.py`'s `has_score_head` (default `False`, every
+prior checkpoint unaffected): an auxiliary regression head predicting
+final score margin (from the mover's own perspective, normalized by
+`board_size**2`), trained alongside the existing win/loss value head
+with a low weight (`score_loss_weight`, default 0.15) so it regularizes
+rather than dominates — same spirit as KataGo's own auxiliary heads.
+Training-only: `export/to_tflite.py` wraps the model to strip this
+output before ONNX export, so `MODEL_CONTRACT.md`'s policy+value
+contract is unaffected regardless of whether a checkpoint has the head.
+
+`selfplay/generate.py`'s new `score_margin()` (reused by
+`selfplay/self_play.py`) computes the target from each game's final
+`AreaScore` — reused rather than duplicated, unlike the `z` (win/loss)
+computation which the two generators do independently. `SelfPlayExamples`
+gained a `score_margin_targets` array; loading an older `.npz` without
+one fills zeros (a neutral placeholder) rather than forcing every
+existing self-play batch to be regenerated.
+
+Adding the head to an already-trained checkpoint goes through
+`bootstrap/train.py`'s existing `init_from_checkpoint` warm-start path
+with `has_score_head: true` in the new run's config — the new head's
+weights are simply absent from the source `state_dict` and load fresh
+(`strict=False`), no separate migration step needed.
+
+Not yet done: actually re-running generation 1's fine-tune with this
+head enabled to see whether it reduces how much a single fine-tune
+drifts (the original motivation, see section 6) — that's the next step,
+before deciding whether the warm-start chaining restructuring (section
+5) is still needed on top of it.
+
 ## Open items as of this writing
 
-- Score-margin auxiliary head: not yet implemented (in progress).
-- Warm-start chaining restructuring (section 5): paused pending the
-  above.
+- Score-margin auxiliary head: implemented (section 7). Not yet
+  evaluated for whether it actually reduces fine-tune drift in practice.
+- Warm-start chaining restructuring (section 5): still paused, pending
+  the above.
 - `bootstrap_gen1_candidate.pt` currently holds the v4 checkpoint (25/75
-  mix, promoted, stable in isolation). `bootstrap_gen2_candidate.pt`
-  from the chained 25/75 attempt is **known-bad** (34.5% Pass
-  probability) — don't build on it.
+  mix, promoted, stable in isolation, **no score head**). Re-running it
+  with `has_score_head: true` is the next real step, not yet done.
+  `bootstrap_gen2_candidate.pt` from the chained 25/75 attempt is
+  **known-bad** (34.5% Pass probability) — don't build on it.

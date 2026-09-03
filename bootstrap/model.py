@@ -15,6 +15,19 @@ nets, tested here for the first time. `num_conv_layers` only matters when
 `num_residual_blocks == 0` (the plain-stack path); both exist so a
 checkpoint from any point in that history stays loadable -- see
 bootstrap/checkpoint.py.
+
+`has_score_head` (2026-09-03, see docs/SELF_PLAY_STABILITY.md) adds an
+auxiliary score-margin regression head, KataGo-style: pure win/loss/tie
+value targets are the right *primary* training signal (training on raw
+score margin instead causes a well-documented opposite pathology -- an
+already-winning net takes needless risks to inflate the margin), but on
+their own they saturate flat near +-1 with no signal distinguishing an
+efficient win from an inefficient one, or a decisive win from a lucky
+one -- directly implicated in a real self-play collapse this project
+hit (empty-board Pass climbing to 25%+ within two fine-tune
+generations). The auxiliary head's own output is never used for actual
+play (see `export/to_tflite.py`'s export wrapper, which strips it) --
+purely a training-time regularizer, exactly as KataGo uses it.
 """
 
 from __future__ import annotations
@@ -63,10 +76,20 @@ class RayZeroNet(nn.Module):
         every board point (row-major) plus one trailing pass probability.
       - `value`: float32 `[N, 1]`, tanh-bounded expected outcome for the
         player to move (`+1` certain win, `-1` certain loss, `0` even).
+
+    `forward()` always returns a 3-tuple, `(policy, value, score_margin)` --
+    `score_margin` is `None` when `has_score_head` is `False` (every
+    checkpoint before 2026-09-03). See this file's module docstring for
+    why the auxiliary head exists and why it's training-only.
     """
 
     def __init__(
-        self, board_size: int = 9, channels: int = 64, num_conv_layers: int = 3, num_residual_blocks: int = 0
+        self,
+        board_size: int = 9,
+        channels: int = 64,
+        num_conv_layers: int = 3,
+        num_residual_blocks: int = 0,
+        has_score_head: bool = False,
     ) -> None:
         # conv1/conv2/conv3 and residual_blocks stay named/ModuleList attributes matching
         # exactly what each architecture generation was actually saved with -- see this
@@ -77,6 +100,7 @@ class RayZeroNet(nn.Module):
         self.channels = channels
         self.num_conv_layers = num_conv_layers
         self.num_residual_blocks = num_residual_blocks
+        self.has_score_head = has_score_head
 
         if num_residual_blocks > 0:
             self.stem_conv = nn.Conv2d(3, channels, kernel_size=3, padding=1)
@@ -95,7 +119,13 @@ class RayZeroNet(nn.Module):
         self.value_fc1 = nn.Linear(channels, channels)
         self.value_fc2 = nn.Linear(channels, 1)
 
-    def forward(self, board_planes: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        if has_score_head:
+            self.score_fc1 = nn.Linear(channels, channels)
+            self.score_fc2 = nn.Linear(channels, 1)
+
+    def forward(
+        self, board_planes: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, "torch.Tensor | None"]:
         if self.num_residual_blocks > 0:
             x = torch.relu(self.stem_bn(self.stem_conv(board_planes)))
             for block in self.residual_blocks:
@@ -116,4 +146,9 @@ class RayZeroNet(nn.Module):
         value_hidden = torch.relu(self.value_fc1(pooled))
         value = torch.tanh(self.value_fc2(value_hidden))
 
-        return policy, value
+        score_margin = None
+        if self.has_score_head:
+            score_hidden = torch.relu(self.score_fc1(pooled))
+            score_margin = self.score_fc2(score_hidden)
+
+        return policy, value, score_margin

@@ -18,11 +18,15 @@ _BATCH = 2
 class RayZeroNetForwardTest(unittest.TestCase):
     def _assert_correct_output_shapes(self, model: RayZeroNet) -> None:
         board_planes = torch.zeros(_BATCH, 3, _BOARD_SIZE, _BOARD_SIZE)
-        policy, value = model(board_planes)
+        policy, value, score_margin = model(board_planes)
         self.assertEqual(policy.shape, (_BATCH, _BOARD_SIZE * _BOARD_SIZE + 1))
         self.assertEqual(value.shape, (_BATCH, 1))
         self.assertTrue(torch.allclose(policy.sum(dim=1), torch.ones(_BATCH), atol=1e-5))
         self.assertTrue(torch.all(value >= -1.0) and torch.all(value <= 1.0))
+        if model.has_score_head:
+            self.assertEqual(score_margin.shape, (_BATCH, 1))
+        else:
+            self.assertIsNone(score_margin)
 
     def test_plain_stack_architecture(self) -> None:
         self._assert_correct_output_shapes(RayZeroNet(board_size=_BOARD_SIZE, channels=8, num_conv_layers=3))
@@ -41,6 +45,15 @@ class RayZeroNetForwardTest(unittest.TestCase):
         x = torch.randn(_BATCH, 8, _BOARD_SIZE, _BOARD_SIZE)
         y = model.residual_blocks[0](x)
         self.assertEqual(y.shape, x.shape)
+
+    def test_score_head_produces_a_real_output_when_enabled(self) -> None:
+        model = RayZeroNet(board_size=_BOARD_SIZE, channels=8, num_residual_blocks=2, has_score_head=True)
+        self._assert_correct_output_shapes(model)
+
+    def test_score_head_is_absent_by_default(self) -> None:
+        model = RayZeroNet(board_size=_BOARD_SIZE, channels=8)
+        self.assertFalse(hasattr(model, "score_fc1"))
+        self._assert_correct_output_shapes(model)
 
 
 if __name__ == "__main__":

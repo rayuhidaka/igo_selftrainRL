@@ -62,11 +62,13 @@ class PlayOneGameTest(unittest.TestCase):
             net = RayZeroPolicyValueNet(checkpoint_path, _BOARD_SIZE)
             mcts = Mcts(net, MctsConfig(num_simulations=_NUM_SIMULATIONS))
 
-            records, winner = play_one_game(
+            records, winner, final_area = play_one_game(
                 mcts, _BOARD_SIZE, komi=7.5, temperature=1.0, max_moves=10, rng=random.Random(0)
             )
 
         self.assertGreater(len(records), 0)
+        self.assertGreaterEqual(final_area.black, 0)
+        self.assertGreaterEqual(final_area.white, 0)
         for planes, policy_target, to_play in records:
             self.assertEqual(planes.shape, (3, _BOARD_SIZE, _BOARD_SIZE))
             self.assertEqual(policy_target.shape, (_BOARD_SIZE * _BOARD_SIZE + 1,))

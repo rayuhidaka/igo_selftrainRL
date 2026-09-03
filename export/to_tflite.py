@@ -23,6 +23,23 @@ from tensorflow.lite.python import schema_py_generated as schema_fb
 from bootstrap.checkpoint import build_model, load_checkpoint
 
 
+class _PolicyValueOnlyExportWrapper(torch.nn.Module):
+    """Strips RayZeroNet.forward()'s auxiliary score-margin output (see its module
+    docstring) before ONNX export -- the exported .tflite conforms to
+    igo-app/docs/MODEL_CONTRACT.md's fixed policy+value contract regardless of whether the
+    source checkpoint has a score head at all, exactly like KataGo drops its own auxiliary
+    heads at export time (they're training-only, never used for actual play).
+    """
+
+    def __init__(self, model: torch.nn.Module) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, board_planes: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        policy, value, _ = self.model(board_planes)
+        return policy, value
+
+
 @contextlib.contextmanager
 def skip_onnx2tf_calibration_data_download():
     """Stubs out an onnx2tf side quirk, scoped to one call.
@@ -97,21 +114,29 @@ def convert(
     channels: int | None = None,
     num_conv_layers: int | None = None,
     num_residual_blocks: int | None = None,
+    has_score_head: bool | None = None,
 ) -> bytes:
-    # channels/num_conv_layers/num_residual_blocks only need supplying for a
-    # legacy checkpoint (saved before bootstrap/checkpoint.py existed) or to
-    # deliberately override -- see bootstrap/checkpoint.py's build_model.
+    # channels/num_conv_layers/num_residual_blocks/has_score_head only need
+    # supplying for a legacy checkpoint (saved before bootstrap/checkpoint.py
+    # existed) or to deliberately override -- see bootstrap/checkpoint.py's
+    # build_model.
     state_dict, metadata = (None, None) if checkpoint is None else load_checkpoint(checkpoint)
     model = build_model(
-        metadata, board_size, channels=channels, num_conv_layers=num_conv_layers, num_residual_blocks=num_residual_blocks
+        metadata,
+        board_size,
+        channels=channels,
+        num_conv_layers=num_conv_layers,
+        num_residual_blocks=num_residual_blocks,
+        has_score_head=has_score_head,
     )
     if state_dict is not None:
         model.load_state_dict(state_dict)
     model.eval()
+    export_model = _PolicyValueOnlyExportWrapper(model)
 
     with tempfile.TemporaryDirectory() as tmp:
         onnx_path = Path(tmp) / "model.onnx"
-        export_onnx(model, board_size, onnx_path)
+        export_onnx(export_model, board_size, onnx_path)
 
         saved_model_dir = Path(tmp) / "saved_model"
         with skip_onnx2tf_calibration_data_download():
@@ -148,10 +173,19 @@ def main() -> None:
     parser.add_argument(
         "--num-residual-blocks", type=int, default=None, help="Only needed for a legacy checkpoint or to override"
     )
+    parser.add_argument(
+        "--has-score-head", type=bool, default=None, help="Only needed for a legacy checkpoint or to override"
+    )
     args = parser.parse_args()
 
     tflite_bytes = convert(
-        args.checkpoint, args.board_size, args.out, args.channels, args.num_conv_layers, args.num_residual_blocks
+        args.checkpoint,
+        args.board_size,
+        args.out,
+        args.channels,
+        args.num_conv_layers,
+        args.num_residual_blocks,
+        args.has_score_head,
     )
     print(f"Wrote {args.out} ({len(tflite_bytes)} bytes)")
 

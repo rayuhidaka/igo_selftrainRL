@@ -40,10 +40,10 @@ from bootstrap.dataset import SelfPlayExamples
 from bootstrap.inference import RayZeroPolicyValueNet, encode_planes
 from engine.move import Move, Pass
 from engine.position import Position
-from engine.scoring import area_score
+from engine.scoring import AreaScore, area_score
 from engine.stone import Stone
 from mcts.mcts import Mcts, MctsConfig
-from selfplay.generate import sample_move
+from selfplay.generate import sample_move, score_margin
 
 
 def visit_count_policy(board_size: int, move_visits: dict[Move, int]) -> np.ndarray:
@@ -73,9 +73,9 @@ def visit_count_policy(board_size: int, move_visits: dict[Move, int]) -> np.ndar
 
 def play_one_game(
     mcts: Mcts, board_size: int, komi: float, temperature: float, max_moves: int, rng: random.Random
-) -> tuple[list[tuple[np.ndarray, np.ndarray, Stone]], "Stone | None"]:
-    """Plays one self-play game and returns `(records, winner)`, where `records` has one
-    `(board_planes, policy_target, to_play)` tuple per move played.
+) -> tuple[list[tuple[np.ndarray, np.ndarray, Stone]], "Stone | None", AreaScore]:
+    """Plays one self-play game and returns `(records, winner, final_area)`, where `records`
+    has one `(board_planes, policy_target, to_play)` tuple per move played.
     """
     position = Position.empty(board_size)
     records: list[tuple[np.ndarray, np.ndarray, Stone]] = []
@@ -89,8 +89,9 @@ def play_one_game(
         position = position.play(move)
         moves_played += 1
 
-    winner = area_score(position).winner(komi)
-    return records, winner
+    final_area = area_score(position)
+    winner = final_area.winner(komi)
+    return records, winner, final_area
 
 
 def main() -> None:
@@ -122,6 +123,7 @@ def main() -> None:
     all_planes: list[np.ndarray] = []
     all_policies: list[np.ndarray] = []
     all_values: list[float] = []
+    all_scores: list[float] = []
 
     min_moves_to_keep = config.get("min_moves_to_keep", 0)
     games_discarded = 0
@@ -129,7 +131,9 @@ def main() -> None:
     start = time.time()
     games_played = 0
     for game_index in range(config["num_games"]):
-        records, winner = play_one_game(mcts, board_size, komi, config["temperature"], config["max_moves"], rng)
+        records, winner, final_area = play_one_game(
+            mcts, board_size, komi, config["temperature"], config["max_moves"], rng
+        )
 
         # A real MCTS-searched game ending in only a handful of moves (both players passing
         # on a near-empty board) is a self-play collapse artifact, not a meaningful outcome
@@ -152,6 +156,7 @@ def main() -> None:
             all_planes.append(planes)
             all_policies.append(policy_target)
             all_values.append(z)
+            all_scores.append(score_margin(final_area, komi, to_play, board_size))
 
         games_played += 1
         elapsed = time.time() - start
@@ -168,6 +173,7 @@ def main() -> None:
         board_planes=np.stack(all_planes).astype(np.float32),
         policy_targets=np.stack(all_policies).astype(np.float32),
         value_targets=np.array(all_values, dtype=np.float32),
+        score_margin_targets=np.array(all_scores, dtype=np.float32),
     )
     out_path = Path(config["out_path"])
     examples.save(out_path)

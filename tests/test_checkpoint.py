@@ -76,6 +76,16 @@ class BuildModelTest(unittest.TestCase):
         model = build_model(metadata, _BOARD_SIZE, num_residual_blocks=2)
         self.assertEqual(len(model.residual_blocks), 2)
 
+    def test_uses_metadatas_score_head_flag_when_no_explicit_override_is_given(self) -> None:
+        metadata = CheckpointMetadata(board_size=_BOARD_SIZE, channels=8, num_conv_layers=3, has_score_head=True)
+        model = build_model(metadata, _BOARD_SIZE)
+        self.assertTrue(hasattr(model, "score_fc1"))
+
+    def test_an_explicit_score_head_override_wins_over_metadata(self) -> None:
+        metadata = CheckpointMetadata(board_size=_BOARD_SIZE, channels=8, num_conv_layers=3, has_score_head=False)
+        model = build_model(metadata, _BOARD_SIZE, has_score_head=True)
+        self.assertTrue(hasattr(model, "score_fc1"))
+
 
 if __name__ == "__main__":
     unittest.main()
