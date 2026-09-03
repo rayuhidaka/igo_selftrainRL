@@ -1,0 +1,15 @@
+# Does the widened net (bootstrap/model.py: 3 conv layers, 64 channels)
+# actually play better than the original (2 conv, 32 channels), or did
+# its lower training loss not translate into real strength? Same
+# settings as configs/eval_batch2_vs_batch1.yaml -- see its comment for
+# why 50 simulations/move, not the 200 default.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2.pt
+current_tier_channels: 32       # trained before the 32->64/2->3-conv architecture bump
+current_tier_num_conv_layers: 2
+min_elo_gap: 50

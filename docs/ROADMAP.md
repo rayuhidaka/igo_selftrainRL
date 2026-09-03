@@ -119,6 +119,36 @@ scheduling, session length) is still to be decided — revisit when Phase
       checkpoint is weak/architecture-limited, see above) better made
       once Phase 3's self-play fine-tuning has actually run, not on this
       bootstrap checkpoint alone.
+- [x] **Widened the net and confirmed it was capacity-limited
+      (2026-09-03):** batch2's loss plateau (above) was tested as a
+      capacity ceiling, not a data ceiling, by widening
+      `bootstrap/model.py`'s `RayZeroNet` from 2 conv layers/32 channels
+      to 3 layers/64 channels and retraining on the *same* `batch2.npz`
+      (`configs/bootstrap_train_batch2_wide.yaml`, no new self-play
+      needed) → `checkpoints/bootstrap_batch2_wide.pt`. Loss kept falling
+      well past where the old net plateaued (~2.60 final vs. the old
+      net's ~3.1-3.6 floor, still trending down at epoch 50 — likely not
+      capacity-limited itself yet). Confirmed this was a real strength
+      gain, not just a lower loss number: evaluated
+      (`configs/eval_batch2wide_vs_batch2.yaml`, same 40-games/50-sims
+      settings) and it beat `bootstrap_batch2.pt` **40-0** too.
+      - Widening broke loading old checkpoints (`RayZeroPolicyValueNet`
+        always built the *current* architecture before calling
+        `load_state_dict`, so the old 2-layer checkpoint's missing
+        `conv3` key crashed it) — fixed by making `channels` and
+        `num_conv_layers` explicit, overridable parameters threaded
+        through `RayZeroNet` → `RayZeroPolicyValueNet` →
+        `eval/match.py`'s `play_match` → `eval/promote.py`'s config
+        (`current_tier_channels`/`current_tier_num_conv_layers`, etc.),
+        so checkpoints from before/after an architecture change can
+        still be compared without retraining anything. This is a
+        workaround, not the real fix `CLAUDE.md`'s own "every checkpoint
+        is versioned and logged with: architecture config..." convention
+        calls for — checkpoints still don't self-describe their own
+        architecture (just a raw `state_dict`), so the caller has to
+        already know it. Worth fixing properly (save a small metadata
+        dict alongside the `state_dict`) before this bites again on the
+        next architecture change.
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)

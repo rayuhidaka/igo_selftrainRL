@@ -24,9 +24,19 @@ from mcts.policy_value_net import Evaluation
 class RayZeroPolicyValueNet:
     """A `PolicyValueNet` (see `mcts/policy_value_net.py`) backed by a `RayZeroNet` checkpoint."""
 
-    def __init__(self, checkpoint: Optional[Path], board_size: int) -> None:
+    def __init__(
+        self, checkpoint: Optional[Path], board_size: int, channels: int = 64, num_conv_layers: int = 3
+    ) -> None:
+        # `channels`/`num_conv_layers` must match the checkpoint's own
+        # training-time architecture (bootstrap/model.py's RayZeroNet), not
+        # necessarily today's defaults -- a checkpoint trained before an
+        # architecture change won't load (state_dict shape/key mismatch)
+        # otherwise. Checkpoints don't yet self-describe their architecture
+        # (a real gap -- see docs/ROADMAP.md's Phase 2 architecture-comparison
+        # note), so this has to be supplied by the caller for anything but
+        # the current default.
         self.board_size = board_size
-        self.model = RayZeroNet(board_size=board_size)
+        self.model = RayZeroNet(board_size=board_size, channels=channels, num_conv_layers=num_conv_layers)
         if checkpoint is not None:
             self.model.load_state_dict(torch.load(checkpoint, map_location="cpu"))
         self.model.eval()
