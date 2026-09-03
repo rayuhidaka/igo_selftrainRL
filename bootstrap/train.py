@@ -21,7 +21,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from bootstrap.checkpoint import CheckpointMetadata, build_model, load_checkpoint, save_checkpoint
-from bootstrap.dataset import SelfPlayDataset, SelfPlayExamples
+from bootstrap.dataset import SelfPlayDataset, SelfPlayExamples, build_training_loader
 from bootstrap.model import RayZeroNet
 from bootstrap.monitoring import TrainingMonitor
 
@@ -44,6 +44,18 @@ def _save_checkpoint(model: RayZeroNet, metadata: CheckpointMetadata, checkpoint
             time.sleep(_SAVE_RETRY_DELAY_SECONDS)
 
 
+def _data_source_summary(data_source) -> str | None:
+    """`config["data_source"]` is either a single path (plain, unweighted training) or a
+    list of `{path, weight}` dicts (mixed-source training, see `build_loader`) --
+    normalizes either into one descriptive string for `CheckpointMetadata`.
+    """
+    if data_source is None:
+        return None
+    if isinstance(data_source, list):
+        return "+".join(f"{item['path']}(w={item['weight']})" for item in data_source)
+    return data_source
+
+
 def _metadata_from_model_and_config(model: RayZeroNet, config: dict) -> CheckpointMetadata:
     # Reads the architecture back off the actual model rather than re-deriving it from
     # config, so a warm-started run's metadata is correct even when it inherited its
@@ -53,10 +65,27 @@ def _metadata_from_model_and_config(model: RayZeroNet, config: dict) -> Checkpoi
         channels=model.channels,
         num_conv_layers=model.num_conv_layers,
         num_residual_blocks=model.num_residual_blocks,
-        data_source=config.get("data_source"),
+        data_source=_data_source_summary(config.get("data_source")),
         seed=config["seed"],
         init_from_checkpoint=config.get("init_from_checkpoint"),
     )
+
+
+def _build_loader(config: dict) -> tuple[DataLoader, int]:
+    """`config["data_source"]` is either a single path (plain, unweighted training -- every
+    config before Phase 3) or a list of `{path, weight}` dicts (mixed-source training, see
+    `bootstrap.dataset.build_training_loader` for why: anchoring a self-play fine-tune
+    against a broader, known-good dataset alongside the new small batch prevents the
+    self-play collapse documented in docs/ROADMAP.md's Phase 3).
+    """
+    data_source = config["data_source"]
+    if isinstance(data_source, list):
+        sources = [(Path(item["path"]), item["weight"]) for item in data_source]
+        return build_training_loader(sources, config["batch_size"])
+    examples = SelfPlayExamples.load(Path(data_source))
+    dataset = SelfPlayDataset(examples)
+    loader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True, drop_last=True)
+    return loader, len(dataset)
 
 
 def _build_model(config: dict) -> RayZeroNet:
@@ -85,10 +114,8 @@ def _build_model(config: dict) -> RayZeroNet:
 
 
 def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor) -> None:
-    examples = SelfPlayExamples.load(Path(config["data_source"]))
-    dataset = SelfPlayDataset(examples)
-    loader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True, drop_last=True)
-    print(f"Training on {len(dataset)} examples ({len(loader)} batches/epoch, batch_size={config['batch_size']})")
+    loader, dataset_size = _build_loader(config)
+    print(f"Training on {dataset_size} examples ({len(loader)} batches/epoch, batch_size={config['batch_size']})")
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
     max_train_seconds = config.get("max_train_seconds")

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, WeightedRandomSampler
 
 
 class SelfPlayExamples:
@@ -60,3 +60,35 @@ class SelfPlayDataset(Dataset):
             torch.from_numpy(self.examples.policy_targets[index]),
             torch.tensor(self.examples.value_targets[index], dtype=torch.float32),
         )
+
+
+def build_training_loader(sources: list[tuple[Path, float]], batch_size: int) -> tuple[DataLoader, int]:
+    """Builds a `DataLoader` mixing multiple `SelfPlayExamples` sources by weight,
+    independent of each source's own size -- e.g. `[(broad.npz, 0.5), (new.npz, 0.5)]`
+    samples roughly half of each batch from each source regardless of how many examples
+    either one actually has.
+
+    Exists for Phase 3's self-play fine-tuning (see docs/ROADMAP.md): fine-tuning on a new,
+    small self-play batch in isolation let the network drift into degenerate behavior within
+    a couple of generations (a real self-play collapse, not just noisy data) -- anchoring
+    each fine-tune against a broader, known-good dataset (Phase 2's imitation-learning data)
+    alongside the new batch prevents that drift, the standard fix real self-play pipelines
+    use. A single `(path, 1.0)` source behaves like plain unweighted sampling.
+
+    Returns `(loader, total_examples)` -- `total_examples` is every source's combined
+    example count, for reporting only (one "epoch" here means that many *weighted-sampled*
+    draws, not one full unweighted pass over each source, since a smaller source with a
+    large weight will be resampled with repetition, and a larger source with a small weight
+    will be undersampled).
+    """
+    datasets: list[SelfPlayDataset] = []
+    per_example_weights: list[float] = []
+    for path, weight in sources:
+        dataset = SelfPlayDataset(SelfPlayExamples.load(path))
+        datasets.append(dataset)
+        per_example_weights.extend([weight / len(dataset)] * len(dataset))
+
+    combined = ConcatDataset(datasets)
+    sampler = WeightedRandomSampler(per_example_weights, num_samples=len(combined), replacement=True)
+    loader = DataLoader(combined, batch_size=batch_size, sampler=sampler, drop_last=True)
+    return loader, len(combined)
