@@ -190,6 +190,29 @@ scheduling, session length) is still to be decided — revisit when Phase
       more exotic (attention/transformer-style blocks, which this
       repo's own KataGo-conversion notes already flag as fragile through
       `onnx2tf`).
+- [x] **Residual tower implemented and confirmed stronger (2026-09-03):**
+      `bootstrap/model.py`'s `RayZeroNet` gained an opt-in residual path
+      (`num_residual_blocks > 0`: a stem conv + `ResidualBlock`s, each
+      two 3x3 convs with BatchNorm and a skip connection) alongside the
+      existing plain-stack path, so every prior checkpoint stays
+      loadable unchanged. Trained 4 blocks/64 channels on the same
+      `batch2.npz` (`configs/bootstrap_train_batch2_residual.yaml`,
+      first real checkpoint using the residual path):
+      41 epochs/145,820 steps, hit the same 90-min cap as the plain-stack
+      comparison run. Loss fell the *entire* run — 3.34 → 2.52 → 2.41 →
+      2.27 → 2.18 → **2.11**, still trending down when time ran out —
+      qualitatively different from the plain stack's hard plateau at
+      ~2.6-2.8. Confirmed as real strength, not just lower loss:
+      evaluated against `bootstrap_batch2_wide_long.pt` (the strongest
+      plain-stack checkpoint, `configs/eval_residual_vs_wide_long.yaml`,
+      same 40-games/50-sims settings) and won **40-0**. Both checkpoints
+      self-described their architecture via `bootstrap/checkpoint.py` —
+      no manual `channels`/`num_conv_layers`/`num_residual_blocks`
+      overrides needed for either side, first real use of that machinery
+      paying off. Not yet done: exporting this checkpoint to `.tflite`,
+      and since it was still improving (not plateaued) when the time cap
+      hit, a longer run and/or more residual blocks is worth trying
+      before concluding this is *this* architecture's ceiling too.
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)

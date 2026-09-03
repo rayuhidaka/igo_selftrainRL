@@ -1,0 +1,18 @@
+# Does the residual tower's much lower training loss (~2.1, still
+# falling when the run's time cap hit) actually translate into stronger
+# play against the best plain-stack checkpoint (bootstrap_batch2_wide_long.pt,
+# 141 epochs, confirmed plateaued at ~2.6-2.8)? Same 40-games/50-sims
+# settings as the earlier architecture comparisons -- see
+# configs/eval_batch2wide_vs_batch2.yaml's comment for why.
+#
+# Both checkpoints are new-format (bootstrap/checkpoint.py) and
+# self-describe their architecture -- no manual channels/num_conv_layers/
+# num_residual_blocks overrides needed here.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_wide_long.pt
+min_elo_gap: 50
