@@ -263,37 +263,80 @@ Neither the chained-warm-start recipe nor the from-pristine
 restructuring has yet achieved *both* stability and a real second-
 generation improvement simultaneously. Only the single first-generation
 fine-tune (from pristine, either with or without the score head) has
-cleanly achieved both so far. This is the natural point to pause and
-decide direction rather than keep varying parameters — see the open
-items below for the live options.
+cleanly achieved both so far.
 
-## Open items as of this writing
+### 10. Hardened filtering reveals the bias is pervasive, not rare (2026-09-03)
+
+Chose the "harden self-play data quality further" option from the list
+above. New `selfplay/self_play.py`: `max_mid_game_pass_weight` +
+`has_suspicious_mid_game_pass` — discards a game if any recorded
+position *outside the final two* (which legitimately precede the game's
+own closing double-pass) assigned Pass more than the threshold (0.5) of
+search's visit weight. `min_moves_to_keep` alone only catches a game
+short enough to end outright from this dynamic; a longer game can carry
+the same bias in one moment without it ending the game.
+
+Regenerated generation 2's self-play with `bootstrap_gen1_candidate_score_head.pt`
+(same checkpoint, seed, and settings as the earlier `self_play_gen2_score_head.npz`
+run) with both filters active:
+
+- 41/100 discarded as too short (consistent with before)
+- **48/100 more discarded for elevated mid-game Pass weight** — a
+  category the length-only filter completely missed
+- **Only 11/100 games (779 examples) survived both filters**
+
+So **89% of this checkpoint's self-play games show detectable Pass bias
+somewhere**, not just the ~40-41% that collapse outright. The bias is
+pervasive throughout most games, just not always severe enough to end
+the game itself. This is a stronger, more useful diagnostic result than
+expected, but it leaves a genuinely awkward practical problem: 779
+examples is too little to confidently fine-tune generation 2 on, even
+with weighted oversampling — training heavily on such a thin slice
+risks a *different* overfitting failure (memorizing 779 specific
+positions) rather than answering whether the filtering approach itself
+works.
+
+**Stopped here for the day, decision pending:** either (a) generate a
+much larger raw self-play batch from this checkpoint so the same
+~11% clean-survival rate still leaves a workable amount of data, or (b)
+accept that filtering the *symptom* out of an already-biased
+checkpoint's self-play has diminishing returns, and address the bias
+in the generating checkpoint more directly (e.g. per-position value
+calibration, not just output filtering). Not decided; pick up here.
+
+## Open items as of this writing (end of 2026-09-03 session)
 
 - Score-margin auxiliary head: implemented (section 7) and evaluated
   (section 8) — real, working, but does not address the chaining
-  collapse. Keep it (no downside, good practice) but don't expect it to
-  solve stability on its own.
+  collapse by itself. Keep it (no downside, good practice).
 - Warm-start chaining restructuring: implemented and evaluated (section
   9) — halves the collapse severity (16% vs. 27-34% Pass probability)
   but loses the clear strength win in the process (statistical wash,
   not a 40-0 promote). Not a complete fix by itself.
-- **Live options for a real next step, none started yet:**
-  - Harden self-play data quality further — filter kept (non-degenerate)
-    games for suspiciously elevated mid-game Pass visit-counts too, not
-    just overall game length, on the theory that biased self-play data
-    (not just chained weights) is a secondary drift-transmission path.
-  - Retune the restructured mix — try less severe dilution (e.g. more
-    training steps, or weighting the most recent generation's self-play
-    higher than older ones) to recover a real strength win while keeping
-    the improved stability.
-  - Step back from per-generation episodic fine-tuning entirely toward
-    a true continuous replay-buffer training loop (closer to how
-    AlphaZero/KataGo actually run) — a bigger infrastructure change, but
-    may be the only way to get both properties reliably at once.
-  - Accept the single first-generation result (real win, stable) as
-    Phase 3's current deliverable and pause multi-generation chaining
-    for now, revisiting once there's a specific reason to push further
-    (e.g. a difficulty-tier need in Phase 4).
+- Hardened self-play filtering: implemented (section 10) — works as
+  designed, but reveals only ~11% of this checkpoint's self-play
+  survives both filters, too little to fine-tune on confidently at that
+  scale. **This is where the session stopped — pick up here tomorrow.**
+- **Immediate next step, first thing tomorrow:** decide between (a)
+  generating a much larger raw self-play batch so ~11% clean survival
+  still yields enough data (cheap to try: just re-run
+  `configs/selfplay_self_play_gen2_hardened.yaml`-style config with a
+  bigger `num_games`, e.g. 500-1000 instead of 100), or (b) treating
+  pervasive mid-game Pass bias as a signal that filtering
+  self-play *output* has hit diminishing returns and the checkpoint's
+  own value calibration needs more direct attention. Leaning toward
+  trying (a) first since it's cheap and directly tests whether more
+  raw self-play volume resolves the practical data-scarcity problem
+  without needing a new approach.
+- Other live options not yet tried, still on the table if (a)/(b) above
+  don't pan out: retune the restructured mix (more steps, or weight
+  recent generations higher than older ones), or step back to a true
+  continuous replay-buffer training loop (bigger infrastructure change,
+  discussed and deliberately deferred — see the "step 3" discussion
+  earlier in this file's git history / the conversation this session).
+  Accepting the single first-generation result as Phase 3's current
+  deliverable and pausing multi-generation chaining remains a valid
+  fallback if none of the above pan out.
 - Known-good checkpoints: `bootstrap_gen1_candidate.pt` (v4, no score
   head) and `bootstrap_gen1_candidate_score_head.pt` (with it) — both
   25/75 mix from the pristine baseline, both promoted, both stable in
@@ -305,3 +348,6 @@ items below for the live options.
   the restructured attempt, `bootstrap_gen2_candidate_restructured.pt`
   (16.09% Pass, not promoted — better than the other two but not a
   clean result either).
+- Data files: `selfplay_games/self_play_gen2_hardened.npz` (779
+  examples, both filters applied) exists but is too small to have been
+  used for anything yet — no fine-tune has been run on it.

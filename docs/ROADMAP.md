@@ -315,6 +315,23 @@ scheduling, session length) is still to be decided — revisit when Phase
       retune the mix, move to a true continuous replay-buffer loop, or
       accept the single-generation result as Phase 3's current
       deliverable) rather than keep varying parameters blindly.
+- [ ] **Tried "harden self-play data quality further" — revealed the
+      bias is pervasive, not resolved (2026-09-03, stopped here for the
+      day):** new `max_mid_game_pass_weight` filter in
+      `selfplay/self_play.py` catches a game carrying the collapse
+      dynamic in one non-terminal position even if it doesn't end the
+      game outright (the old `min_moves_to_keep` alone couldn't).
+      Regenerating generation 2's self-play with both filters active
+      found 89/100 games had detectable Pass bias somewhere (41 too
+      short + 48 more with elevated mid-game Pass weight) — only 11
+      games (779 examples) survived. Too little data to confidently
+      fine-tune on. **Next session starts here:** decide between
+      generating a much larger raw self-play batch so the same ~11%
+      survival rate still yields workable data (cheap, try first), or
+      treating this as a sign that filtering self-play *output* has hit
+      diminishing returns and the checkpoint's own value calibration
+      needs more direct attention. Full detail:
+      `docs/SELF_PLAY_STABILITY.md` section 10.
 - [ ] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`), not shipped automatically
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate
