@@ -1,0 +1,19 @@
+# A fast, cheap sanity check that selfplay/self_play.py's whole pipeline
+# works -- not a meaningful data batch (3 games, 16 simulations/move,
+# capped at 30 moves/game). Uses the current best checkpoint
+# (bootstrap_batch2_residual.pt), which self-describes its architecture
+# via bootstrap/checkpoint.py -- no channels/num_conv_layers/
+# num_residual_blocks override needed.
+
+checkpoint_path: checkpoints/bootstrap_batch2_residual.pt
+board_size: 9
+komi: 7.5
+seed: 9
+
+num_games: 3
+max_moves: 30
+num_simulations: 16
+temperature: 1.0
+max_seconds: null
+
+out_path: selfplay_games/self_play_smoke_test.npz

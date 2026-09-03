@@ -9,6 +9,14 @@ self-play) and `../docs/ROADMAP.md`'s Phase 2.
 Fast: ~20ms/move on this machine (one net evaluation per move), so a few
 hundred games is a few minutes' work, not hours.
 
-The self-play generation + policy/value update loop for fine-tuning
-Ray-zeroGo *past* its imitation-learning starting point (`../docs/ROADMAP.md`'s
-Phase 3) is separate, later work, not this file.
+`self_play.py` is that separate, later work (`../docs/ROADMAP.md`'s
+Phase 3): genuine self-play using real MCTS search (`../mcts/mcts.py`)
+with Ray-zeroGo's own current-best checkpoint, not KataGo's. The
+recorded policy target is the search's visit-count distribution, not a
+raw net output. Much more expensive per move than `generate.py` (a full
+search per move instead of one net evaluation) -- expect real seconds
+per move, not milliseconds. Produces the same
+`bootstrap.dataset.SelfPlayExamples` format `generate.py` does, so
+`bootstrap/train.py` trains on either's output unmodified. The policy/value
+update loop itself is just `bootstrap/train.py` again, pointed at
+`self_play.py`'s output — no separate training code needed.
