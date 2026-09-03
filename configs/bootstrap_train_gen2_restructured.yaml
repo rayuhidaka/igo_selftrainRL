@@ -1,0 +1,47 @@
+# The actual fix for the chaining collapse (docs/SELF_PLAY_STABILITY.md
+# sections 5 and 8): fine-tune from the PRISTINE bootstrap_batch2_residual.pt
+# every generation, not the previous generation's candidate -- warm-starting
+# a fine-tune of a fine-tune is what compounded bias multiplicatively
+# (1.22%->34.5%, then 1.46%->27.04% with the score head, same recipe both
+# times). Self-play *games* still come from the current best checkpoint
+# (bootstrap_gen1_candidate_score_head.pt generated self_play_gen2_score_head.npz)
+# -- only the fine-tune's starting weights change, not how self-play itself
+# is generated.
+#
+# data_source mixes ALL accumulated self-play so far (gen1 + gen2) alongside
+# the anchor, not just the newest generation's batch -- the accumulating
+# "replay buffer" real self-play pipelines use, approximated here as an
+# explicit weighted list since we don't have a single growing file.
+# 25% anchor (unchanged from the single-generation recipe), 75% split evenly
+# across the two self-play generations (37.5% each) -- as more generations
+# accumulate, each individual one's share of the training signal naturally
+# shrinks, same as a real replay buffer.
+
+board_size: 9
+seed: 9
+init_from_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+has_score_head: true
+
+checkpoint_out: checkpoints/bootstrap_gen2_candidate_restructured.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.25
+  - path: selfplay_games/self_play_gen1.npz
+    weight: 0.375
+  - path: selfplay_games/self_play_gen2_score_head.npz
+    weight: 0.375
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_gen2_candidate_restructured
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+# ~100s targets ~10x oversample of the *combined* 12,688-example
+# accumulated self-play pool (7,879 + 4,809), comparable exposure per
+# generation to the single-generation recipe's ~10x of the smaller pool it
+# had.
+max_train_seconds: 100

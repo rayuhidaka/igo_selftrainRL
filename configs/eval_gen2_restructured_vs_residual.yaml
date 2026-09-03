@@ -1,0 +1,13 @@
+# Is the restructured gen2 checkpoint (fine-tuned from the pristine
+# baseline with accumulated self-play data, not chained) still a real
+# strength improvement over the pristine baseline, despite the residual
+# Pass-probability elevation? Same 40-games/50-sims settings as every
+# prior comparison.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+min_elo_gap: 50
