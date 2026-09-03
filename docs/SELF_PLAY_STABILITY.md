@@ -181,6 +181,17 @@ drifts (the original motivation, see section 6) — that's the next step,
 before deciding whether the warm-start chaining restructuring (section
 5) is still needed on top of it.
 
+**Gotcha hit immediately trying this (2026-09-03):** both `batch2.npz`
+and `self_play_gen1.npz` predate `score_margin_targets` entirely, so
+`SelfPlayExamples.load()`'s backward-compat zero-fill silently kicked
+in — the first attempt at this experiment trained the score head to
+predict "always 0" (loss went to exactly 0.0000 almost immediately),
+which is real but completely uninformative. Any dataset used to
+actually test the score head's effect needs regenerating with the
+current `selfplay/generate.py`/`self_play.py` first — check
+`"score_margin_targets" in np.load(path)` before trusting a run that
+uses an old `.npz` for anything score-head-related.
+
 ## Open items as of this writing
 
 - Score-margin auxiliary head: implemented (section 7). Not yet
