@@ -74,6 +74,7 @@ class RayZeroNet(nn.Module):
         # keys keep working for whichever generation a checkpoint came from.
         super().__init__()
         self.board_size = board_size
+        self.channels = channels
         self.num_conv_layers = num_conv_layers
         self.num_residual_blocks = num_residual_blocks
 

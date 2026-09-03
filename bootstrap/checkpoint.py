@@ -43,6 +43,11 @@ class CheckpointMetadata:
     data_source: Optional[str] = None
     seed: Optional[int] = None
     elo: Optional[float] = None
+    init_from_checkpoint: Optional[str] = None
+    """Path of the checkpoint this one continued training from (warm start), if any -- see
+    `bootstrap/train.py`'s `init_from_checkpoint` config key. `None` means trained from a
+    fresh, randomly-initialized network (Phase 2's imitation-learning checkpoints, or a
+    from-scratch Phase 3 run)."""
 
 
 def save_checkpoint(model: RayZeroNet, metadata: CheckpointMetadata, path: Path) -> None:

@@ -20,7 +20,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 
-from bootstrap.checkpoint import CheckpointMetadata, save_checkpoint
+from bootstrap.checkpoint import CheckpointMetadata, build_model, load_checkpoint, save_checkpoint
 from bootstrap.dataset import SelfPlayDataset, SelfPlayExamples
 from bootstrap.model import RayZeroNet
 from bootstrap.monitoring import TrainingMonitor
@@ -44,15 +44,44 @@ def _save_checkpoint(model: RayZeroNet, metadata: CheckpointMetadata, checkpoint
             time.sleep(_SAVE_RETRY_DELAY_SECONDS)
 
 
-def _metadata_from_config(config: dict) -> CheckpointMetadata:
+def _metadata_from_model_and_config(model: RayZeroNet, config: dict) -> CheckpointMetadata:
+    # Reads the architecture back off the actual model rather than re-deriving it from
+    # config, so a warm-started run's metadata is correct even when it inherited its
+    # architecture from init_from_checkpoint's own metadata rather than this config.
     return CheckpointMetadata(
-        board_size=config["board_size"],
-        channels=config.get("channels", 64),
-        num_conv_layers=config.get("num_conv_layers", 3),
-        num_residual_blocks=config.get("num_residual_blocks", 0),
+        board_size=model.board_size,
+        channels=model.channels,
+        num_conv_layers=model.num_conv_layers,
+        num_residual_blocks=model.num_residual_blocks,
         data_source=config.get("data_source"),
         seed=config["seed"],
+        init_from_checkpoint=config.get("init_from_checkpoint"),
     )
+
+
+def _build_model(config: dict) -> RayZeroNet:
+    init_from_checkpoint = config.get("init_from_checkpoint")
+    if init_from_checkpoint is None:
+        return RayZeroNet(
+            board_size=config["board_size"],
+            channels=config.get("channels", 64),
+            num_conv_layers=config.get("num_conv_layers", 3),
+            num_residual_blocks=config.get("num_residual_blocks", 0),
+        )
+    # Warm start (Phase 3's self-play fine-tuning, see docs/ROADMAP.md): continue training
+    # an existing checkpoint instead of a fresh, randomly-initialized network. channels/
+    # num_conv_layers/num_residual_blocks in config only need setting if init_from_checkpoint
+    # is a legacy checkpoint with no recorded architecture -- see build_model's docstring.
+    state_dict, metadata = load_checkpoint(Path(init_from_checkpoint))
+    model = build_model(
+        metadata,
+        config["board_size"],
+        channels=config.get("channels"),
+        num_conv_layers=config.get("num_conv_layers"),
+        num_residual_blocks=config.get("num_residual_blocks"),
+    )
+    model.load_state_dict(state_dict)
+    return model
 
 
 def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor) -> None:
@@ -64,7 +93,7 @@ def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor) -> None:
     optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
     max_train_seconds = config.get("max_train_seconds")
     checkpoint_out = Path(config["checkpoint_out"])
-    metadata = _metadata_from_config(config)
+    metadata = _metadata_from_model_and_config(model, config)
 
     start = time.time()
     step = 0
@@ -117,15 +146,7 @@ def main() -> None:
     monitor.log_config(config)
 
     torch.manual_seed(config["seed"])
-    channels = config.get("channels", 64)
-    num_conv_layers = config.get("num_conv_layers", 3)
-    num_residual_blocks = config.get("num_residual_blocks", 0)
-    model = RayZeroNet(
-        board_size=config["board_size"],
-        channels=channels,
-        num_conv_layers=num_conv_layers,
-        num_residual_blocks=num_residual_blocks,
-    )
+    model = _build_model(config)
 
     if config.get("data_source"):
         train(model, config, monitor)
@@ -133,7 +154,7 @@ def main() -> None:
         # Phase 1 fallback: no data to train on yet, just prove the export/loading path
         # with a fresh, untrained checkpoint -- see docs/ROADMAP.md's Phase 1.
         out_path = Path(config["checkpoint_out"])
-        save_checkpoint(model, _metadata_from_config(config), out_path)
+        save_checkpoint(model, _metadata_from_model_and_config(model, config), out_path)
         print(f"Wrote untrained checkpoint to {out_path} (board_size={config['board_size']}, seed={config['seed']})")
         print("No data_source configured -- see docs/ROADMAP.md's Phase 2 for real training.")
 
