@@ -1,0 +1,31 @@
+# Generation 2's fine-tune, using the settings proven out by
+# configs/bootstrap_train_gen1_candidate.yaml's v4: 25% weight on the
+# broad anchor dataset (batch2.npz), 75% on the new self-play batch,
+# targeting ~10x oversample of the self-play data (matches v1's
+# original exposure level, just with anchor protection this time).
+#
+# data_source points at self_play_gen2.npz -- regenerate it from
+# bootstrap_gen1_candidate.pt (the *v4* checkpoint, not an earlier
+# attempt) via configs/selfplay_self_play_gen2.yaml before running this.
+
+board_size: 9
+seed: 9
+init_from_checkpoint: checkpoints/bootstrap_gen1_candidate.pt
+
+checkpoint_out: checkpoints/bootstrap_gen2_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.25
+  - path: selfplay_games/self_play_gen2.npz
+    weight: 0.75
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_gen2_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60
