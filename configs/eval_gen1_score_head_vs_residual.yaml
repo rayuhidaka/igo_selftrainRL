@@ -1,0 +1,11 @@
+# Sanity check: is the score-head-equipped fine-tune still a real
+# strength win over the pristine baseline, same as v4 was without the
+# head? Same 40-games/50-sims settings as every prior comparison.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+min_elo_gap: 50
