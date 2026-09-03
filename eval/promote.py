@@ -33,12 +33,12 @@ def main() -> None:
         config["num_games"],
         num_simulations=config.get("num_simulations", DEFAULT_NUM_SIMULATIONS),
         komi=config.get("komi", DEFAULT_KOMI),
-        # Only need overriding when comparing across an architecture change
-        # (bootstrap/model.py) -- see RayZeroPolicyValueNet's channels docstring.
-        channels_a=config.get("candidate_channels", 64),
-        channels_b=config.get("current_tier_channels", 64),
-        num_conv_layers_a=config.get("candidate_num_conv_layers", 3),
-        num_conv_layers_b=config.get("current_tier_num_conv_layers", 3),
+        # Only need setting for a legacy checkpoint (no recorded architecture)
+        # or to deliberately override -- see RayZeroPolicyValueNet's docstring.
+        channels_a=config.get("candidate_channels"),
+        channels_b=config.get("current_tier_channels"),
+        num_conv_layers_a=config.get("candidate_num_conv_layers"),
+        num_conv_layers_b=config.get("current_tier_num_conv_layers"),
     )
     candidate_rating, tier_rating = update_ratings(DEFAULT_INITIAL_RATING, DEFAULT_INITIAL_RATING, results)
 

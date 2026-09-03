@@ -20,7 +20,7 @@ import tensorflow as tf
 import torch
 from tensorflow.lite.python import schema_py_generated as schema_fb
 
-from bootstrap.model import RayZeroNet
+from bootstrap.checkpoint import build_model, load_checkpoint
 
 
 @contextlib.contextmanager
@@ -90,10 +90,20 @@ def rename_io_tensors(tflite_bytes: bytes, input_names: dict[int, str], output_n
     return bytes(builder.Output())
 
 
-def convert(checkpoint: Path | None, board_size: int, out_path: Path) -> bytes:
-    model = RayZeroNet(board_size=board_size)
-    if checkpoint is not None:
-        model.load_state_dict(torch.load(checkpoint, map_location="cpu"))
+def convert(
+    checkpoint: Path | None,
+    board_size: int,
+    out_path: Path,
+    channels: int | None = None,
+    num_conv_layers: int | None = None,
+) -> bytes:
+    # channels/num_conv_layers only need supplying for a legacy checkpoint
+    # (saved before bootstrap/checkpoint.py existed) or to deliberately
+    # override -- see bootstrap/checkpoint.py's build_model.
+    state_dict, metadata = (None, None) if checkpoint is None else load_checkpoint(checkpoint)
+    model = build_model(metadata, board_size, channels=channels, num_conv_layers=num_conv_layers)
+    if state_dict is not None:
+        model.load_state_dict(state_dict)
     model.eval()
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -123,12 +133,18 @@ def convert(checkpoint: Path | None, board_size: int, out_path: Path) -> bytes:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint", type=Path, default=None, help="PyTorch state_dict; omit for a fresh, untrained net")
+    parser.add_argument("--checkpoint", type=Path, default=None, help="Checkpoint path; omit for a fresh, untrained net")
     parser.add_argument("--board-size", type=int, default=9)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--channels", type=int, default=None, help="Only needed for a legacy checkpoint or to override"
+    )
+    parser.add_argument(
+        "--num-conv-layers", type=int, default=None, help="Only needed for a legacy checkpoint or to override"
+    )
     args = parser.parse_args()
 
-    tflite_bytes = convert(args.checkpoint, args.board_size, args.out)
+    tflite_bytes = convert(args.checkpoint, args.board_size, args.out, args.channels, args.num_conv_layers)
     print(f"Wrote {args.out} ({len(tflite_bytes)} bytes)")
 
     interpreter = tf.lite.Interpreter(model_content=tflite_bytes)

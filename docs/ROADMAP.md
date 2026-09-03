@@ -149,6 +149,28 @@ scheduling, session length) is still to be decided — revisit when Phase
         already know it. Worth fixing properly (save a small metadata
         dict alongside the `state_dict`) before this bites again on the
         next architecture change.
+- [x] **Checkpoints self-describe their architecture (2026-09-03):** the
+      real fix flagged above. New module `bootstrap/checkpoint.py`
+      (`CheckpointMetadata`, `save_checkpoint`/`load_checkpoint`,
+      `build_model`) wraps a `state_dict` with `channels`,
+      `num_conv_layers`, `data_source`, `seed`, and `elo` (`None` until
+      an `eval/` run estimates one). `bootstrap/train.py`,
+      `bootstrap/inference.py`'s `RayZeroPolicyValueNet`, and
+      `export/to_tflite.py` all go through it now — a checkpoint saved
+      from here on gets its architecture right automatically, no manual
+      `channels`/`num_conv_layers` needed (verified: exported
+      `bootstrap_smoke_test.pt` and played it in `eval/match.py` against
+      a legacy checkpoint with zero manual overrides on the new
+      checkpoint's side). `channels`/`num_conv_layers` also moved out of
+      `bootstrap/model.py`'s hardcoded defaults into `bootstrap/train.py`
+      config keys, per `CLAUDE.md`'s "hyperparameters live in config
+      files" convention. Old checkpoints (`bootstrap_batch1/2/2_wide.pt`,
+      etc.) are untouched, bare `state_dict`s — they keep loading via the
+      legacy path (`metadata=None`), still needing
+      `channels`/`num_conv_layers` supplied explicitly the same way as
+      before (`eval/promote.py`'s `current_tier_channels`/
+      `current_tier_num_conv_layers` config keys). 5 new tests
+      (`tests/test_checkpoint.py`), full suite (48 tests) passing.
 
 ## Phase 3 — Self-play fine-tuning
 - [ ] Self-play generation loop (`selfplay/`)

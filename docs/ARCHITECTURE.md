@@ -31,6 +31,28 @@ constraint (no history/komi as input) rather than trained with richer
 features and then having them dropped at export time — otherwise its
 training-time and inference-time inputs would silently diverge.
 
+## PyTorch checkpoint format (internal, not the igo-app contract above)
+
+Distinct from the `.tflite` export contract above: `bootstrap/checkpoint.py`
+wraps a `RayZeroNet` `state_dict` with its own architecture (`channels`,
+`num_conv_layers`), training data source, seed, and (once `eval/` has
+estimated one) Elo — `{"model_state_dict": ..., "metadata": {...}}`, not a
+bare `state_dict`. Every loader (`bootstrap/inference.py`'s
+`RayZeroPolicyValueNet`, `export/to_tflite.py`) goes through
+`load_checkpoint`/`build_model` so a checkpoint self-describes the net it
+needs, rather than the caller having to already know it.
+
+This exists because of a real bug (2026-09-03): widening `RayZeroNet`
+(see docs/ROADMAP.md's Phase 2) changed its constructor's defaults, which
+broke loading every checkpoint saved before the change — callers always
+built *today's* architecture before `load_state_dict`, so an old
+checkpoint's missing/extra keys crashed it. Checkpoints saved before this
+module existed (a bare `state_dict`) still load fine (`metadata=None`),
+they just need `channels`/`num_conv_layers` supplied explicitly by the
+caller the same way every checkpoint used to require — see
+`eval/promote.py`'s `current_tier_channels`/`current_tier_num_conv_layers`
+config keys for that path.
+
 ## Pipeline stages
 
 1. `bootstrap/` — trains Ray-zeroGo's initial network via imitation

@@ -14,7 +14,7 @@ from typing import Optional
 
 import torch
 
-from bootstrap.model import RayZeroNet
+from bootstrap.checkpoint import build_model, load_checkpoint
 from engine.move import Move, Pass, Play
 from engine.point import Point
 from engine.position import Position
@@ -25,20 +25,23 @@ class RayZeroPolicyValueNet:
     """A `PolicyValueNet` (see `mcts/policy_value_net.py`) backed by a `RayZeroNet` checkpoint."""
 
     def __init__(
-        self, checkpoint: Optional[Path], board_size: int, channels: int = 64, num_conv_layers: int = 3
+        self,
+        checkpoint: Optional[Path],
+        board_size: int,
+        channels: Optional[int] = None,
+        num_conv_layers: Optional[int] = None,
     ) -> None:
-        # `channels`/`num_conv_layers` must match the checkpoint's own
-        # training-time architecture (bootstrap/model.py's RayZeroNet), not
-        # necessarily today's defaults -- a checkpoint trained before an
-        # architecture change won't load (state_dict shape/key mismatch)
-        # otherwise. Checkpoints don't yet self-describe their architecture
-        # (a real gap -- see docs/ROADMAP.md's Phase 2 architecture-comparison
-        # note), so this has to be supplied by the caller for anything but
-        # the current default.
+        # `channels`/`num_conv_layers` only need supplying explicitly for a
+        # *legacy* checkpoint (saved before bootstrap/checkpoint.py existed,
+        # so its architecture isn't recorded anywhere) or to deliberately
+        # override -- a checkpoint saved via bootstrap/checkpoint.py carries
+        # its own architecture and gets it right automatically. See
+        # bootstrap/checkpoint.py's module docstring for why this exists.
         self.board_size = board_size
-        self.model = RayZeroNet(board_size=board_size, channels=channels, num_conv_layers=num_conv_layers)
-        if checkpoint is not None:
-            self.model.load_state_dict(torch.load(checkpoint, map_location="cpu"))
+        state_dict, metadata = (None, None) if checkpoint is None else load_checkpoint(checkpoint)
+        self.model = build_model(metadata, board_size, channels=channels, num_conv_layers=num_conv_layers)
+        if state_dict is not None:
+            self.model.load_state_dict(state_dict)
         self.model.eval()
 
     @torch.no_grad()
