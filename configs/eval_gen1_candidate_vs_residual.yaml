@@ -1,0 +1,14 @@
+# Phase 3's first real question: does one generation of self-play
+# fine-tuning (bootstrap_gen1_candidate.pt, warm-started from and
+# self-played by bootstrap_batch2_residual.pt) actually play better
+# than the checkpoint it came from? Same 40-games/50-sims settings as
+# every prior architecture comparison -- see
+# configs/eval_batch2wide_vs_batch2.yaml's comment for why.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+min_elo_gap: 50

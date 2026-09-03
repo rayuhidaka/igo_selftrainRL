@@ -215,9 +215,45 @@ scheduling, session length) is still to be decided — revisit when Phase
       before concluding this is *this* architecture's ceiling too.
 
 ## Phase 3 — Self-play fine-tuning
-- [ ] Self-play generation loop (`selfplay/`)
-- [ ] Policy/value update loop, run locally (see the local-training note
-      at the top of this file)
+- [x] **Self-play generation loop (2026-09-03):** `selfplay/self_play.py`
+      -- genuine AlphaZero-style self-play via real MCTS search
+      (`mcts/mcts.py`), unlike Phase 2's `generate.py` (samples straight
+      from KataGo's policy, no search). Records the search's visit-count
+      distribution as the policy target, not a raw net output. Same
+      `SelfPlayExamples` format `generate.py` produces, so
+      `bootstrap/train.py` needed no changes to train on it. Much more
+      expensive per move than distillation (a full search per move) but
+      still cheap in practice: a 10-game/100-sim timing calibration
+      averaged ~17.8s/game (~0.25s/move); the first real batch (100
+      games, `configs/selfplay_self_play_gen1.yaml`) took ~34 min for
+      7,879 examples.
+- [x] **Policy/value update loop (2026-09-03):** no new training code
+      needed -- `bootstrap/train.py` already consumed the right data
+      format. What *was* needed: warm-starting. Every run before this
+      built a fresh, randomly-initialized network, which would have
+      made a self-play fine-tune meaningless (training from scratch on
+      ~8k examples measures "far less data than Phase 2," not whether
+      self-play helps). New `init_from_checkpoint` config key continues
+      training an existing checkpoint's weights instead
+      (`CheckpointMetadata` gained a matching field to record the
+      lineage). 4 new tests (`tests/test_train.py`).
+- [x] **First full generation cycle, proven end to end (2026-09-03):**
+      self-played 100 games with `bootstrap_batch2_residual.pt` →
+      fine-tuned a candidate from it (warm start, 10 conservative epochs,
+      5x lower LR than the original bootstrap runs, deliberately
+      cautious given the small batch) →
+      evaluated the candidate against its own parent
+      (`configs/eval_gen1_candidate_vs_residual.yaml`, same
+      40-games/50-sims settings as prior comparisons, **both sides
+      playing with their own equal-budget MCTS search, not raw
+      policy**) → candidate won **40-0** (1726.1 vs 1273.9). Meaningful
+      because both sides searched equally hard — the win shows
+      fine-tuning toward the search-refined policy made the *network
+      itself* stronger, which is the actual mechanism Phase 3 is
+      supposed to deliver, not just "more search wins." One caveat: a
+      single generation on one fairly small self-play batch is real
+      signal, not yet proof this compounds over multiple generations —
+      that's the natural next step, not yet done.
 - [ ] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`), not shipped automatically
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate

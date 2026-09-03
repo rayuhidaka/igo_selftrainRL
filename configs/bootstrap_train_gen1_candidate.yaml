@@ -1,0 +1,30 @@
+# Phase 3's first real fine-tuning run: continues bootstrap_batch2_residual.pt
+# (warm start, see bootstrap/train.py's init_from_checkpoint) on its own
+# self-play data (configs/selfplay_self_play_gen1.yaml's output, 100
+# games / 7,879 examples) rather than training a fresh network from
+# scratch -- see docs/ROADMAP.md's Phase 3 for why that distinction
+# matters here.
+#
+# Small dataset (7,879 examples, ~123 batches/epoch) and an
+# already-trained starting point -- both epochs and learning_rate are
+# deliberately conservative (10 epochs, not another 40-140; 5x lower LR
+# than the original bootstrap runs) to avoid overwriting what the net
+# already learned by overfitting hard on one small new batch.
+
+board_size: 9
+seed: 9
+init_from_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+
+checkpoint_out: checkpoints/bootstrap_gen1_candidate.pt
+data_source: selfplay_games/self_play_gen1.npz
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 10
+
+log_dir: runs
+run_name: bootstrap_gen1_candidate
+log_every_n_steps: 25
+checkpoint_interval_steps: 300
+
+max_train_seconds: 600
