@@ -1,0 +1,18 @@
+# Generation 2's self-play data -- same settings as gen1
+# (configs/selfplay_self_play_gen1.yaml), but using bootstrap_gen1_candidate.pt
+# (the checkpoint gen1 produced) instead of the original residual
+# checkpoint, so this tests whether improvement compounds across
+# generations -- see docs/ROADMAP.md's Phase 3.
+
+checkpoint_path: checkpoints/bootstrap_gen1_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260904
+
+num_games: 100
+max_moves: 200
+num_simulations: 100
+temperature: 1.0
+max_seconds: null
+
+out_path: selfplay_games/self_play_gen2.npz
