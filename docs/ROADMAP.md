@@ -292,11 +292,18 @@ scheduling, session length) is still to be decided — revisit when Phase
       flat-near-saturation failure mode) led to adding a KataGo-style
       auxiliary score-margin head (`bootstrap/model.py`'s
       `has_score_head`, training-only, `export/to_tflite.py` strips it)
-      — implemented and verified end to end, not yet evaluated for
-      whether it reduces drift in practice. The warm-start-chaining
-      restructuring (fine-tune from the pristine checkpoint each
-      generation, not the previous candidate) is still an open,
-      unimplemented next step.
+      — implemented and verified end to end. **Evaluated against the
+      actual chaining collapse and it did not fix it**: chaining the
+      score-head-equipped recipe into a second generation still
+      collapsed (1.46%→27.04% empty-board Pass probability, nearly the
+      same magnitude as without the head, 1.22%→34.5%). Useful negative
+      result — rules out value-target flatness as the chaining
+      collapse's primary cause. Keeping the score head (real signal, no
+      downside) but it isn't a fix for this failure mode. The
+      warm-start-chaining restructuring (fine-tune from the pristine
+      checkpoint each generation, not the previous candidate, mixing in
+      all accumulated self-play data) is now the priority next step —
+      see `docs/SELF_PLAY_STABILITY.md` sections 5 and 8.
 - [ ] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`), not shipped automatically
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate

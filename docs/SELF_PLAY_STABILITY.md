@@ -192,14 +192,51 @@ current `selfplay/generate.py`/`self_play.py` first — check
 `"score_margin_targets" in np.load(path)` before trusting a run that
 uses an old `.npz` for anything score-head-related.
 
+### 8. The score head does not fix the chaining collapse (2026-09-03)
+
+Regenerated `self_play_gen1.npz` with real score margins, re-ran
+generation 1's fine-tune with `has_score_head: true` (same 25/75 recipe
+as v4): Pass probability 1.46% (v4 without the head: 1.22%, roughly
+comparable), real 40-0 win against the pristine baseline — a valid,
+working checkpoint. Then ran the actual test this was for: generated
+generation 2's self-play with *that* checkpoint, fine-tuned generation
+2 with the score head enabled throughout (identical chained-warm-start
+recipe that caused the original 1.22%→34.5% collapse) —
+
+**Result: Pass probability 1.46%→27.04%. Still a collapse, almost the
+same magnitude as without the score head.**
+
+This is a genuinely useful negative result: it rules out value-target
+design (win/loss/tie flatness) as the primary cause of the chaining
+collapse. If that were the main driver, richer score-margin supervision
+should have visibly dampened the drift — it didn't, within noise of the
+no-score-head result. The score head is still worth keeping (sound
+practice, real non-zero training signal, no observed downside), but
+it's not a fix for *this* failure mode. The cause remains what section
+5 identified: chaining warm-starts on self-generated data compounds
+whatever bias exists multiplicatively, regardless of what auxiliary
+signal accompanies training.
+
+**This makes the warm-start-chaining restructuring (section 5) the
+real next step**, not an optional extra on top of the score head.
+
 ## Open items as of this writing
 
-- Score-margin auxiliary head: implemented (section 7). Not yet
-  evaluated for whether it actually reduces fine-tune drift in practice.
-- Warm-start chaining restructuring (section 5): still paused, pending
-  the above.
-- `bootstrap_gen1_candidate.pt` currently holds the v4 checkpoint (25/75
-  mix, promoted, stable in isolation, **no score head**). Re-running it
-  with `has_score_head: true` is the next real step, not yet done.
-  `bootstrap_gen2_candidate.pt` from the chained 25/75 attempt is
-  **known-bad** (34.5% Pass probability) — don't build on it.
+- Score-margin auxiliary head: implemented (section 7) and evaluated
+  (section 8) — real, working, but does not address the chaining
+  collapse. Keep it (no downside, good practice) but don't expect it to
+  solve stability on its own.
+- **Warm-start chaining restructuring (section 5): now the priority.**
+  Always fine-tune from the pristine checkpoint (not the previous
+  generation's candidate), mixing in all accumulated self-play data so
+  far, while still generating each generation's self-play *games* with
+  the current best candidate. Not yet implemented.
+- Known-good checkpoints: `bootstrap_gen1_candidate.pt` (v4, no score
+  head) and `bootstrap_gen1_candidate_score_head.pt` (with it) — both
+  25/75 mix from the pristine baseline, both promoted, both stable in
+  isolation.
+- Known-bad checkpoints — chained a second generation from either of
+  the above with the old (non-restructured) recipe and collapsed: the
+  original `bootstrap_gen2_candidate.pt` (34.5% Pass) and
+  `bootstrap_gen2_candidate_score_head.pt` (27.04% Pass). Don't build on
+  either.

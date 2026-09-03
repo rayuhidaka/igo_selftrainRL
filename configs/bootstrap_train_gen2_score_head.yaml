@@ -1,0 +1,31 @@
+# Generation 2's fine-tune with the score head carried forward -- the
+# real test of docs/SELF_PLAY_STABILITY.md section 7's hypothesis.
+# Without the score head, chaining the identical 25/75 recipe into a
+# second generation took empty-board Pass probability from 1.22% to
+# 34.5% (a real collapse). Same recipe here, score head enabled
+# throughout (inherited automatically from
+# bootstrap_gen1_candidate_score_head.pt's own metadata, but declared
+# explicitly for clarity).
+
+board_size: 9
+seed: 9
+init_from_checkpoint: checkpoints/bootstrap_gen1_candidate_score_head.pt
+has_score_head: true
+
+checkpoint_out: checkpoints/bootstrap_gen2_candidate_score_head.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.25
+  - path: selfplay_games/self_play_gen2_score_head.npz
+    weight: 0.75
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_gen2_candidate_score_head
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60
