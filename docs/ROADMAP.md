@@ -340,10 +340,21 @@ scheduling, session length) is still to be decided — revisit when Phase
       chained generation 2 came back 0/100 short/collapsed games, and
       generation 2 is a confirmed genuine strength win over both the
       pristine baseline and its own generation-1 parent** —
-      `bootstrap_gen2_no_pass_guard_candidate.pt` is the current best
-      checkpoint. The healthy AlphaZero-style improvement loop this
+      `bootstrap_gen2_no_pass_guard_candidate.pt` was the best checkpoint
+      at that point. The healthy AlphaZero-style improvement loop this
       phase was always meant to produce is now actually working end to
       end.
+- [x] **Generation 3, for extra confidence — the pattern holds a third
+      time (2026-09-05):** chained the same recipe one more generation
+      from `bootstrap_gen2_no_pass_guard_candidate.pt` — **0/100 short
+      games** (third consecutive clean generation).
+      `bootstrap_gen3_no_pass_guard_candidate.pt` beats both the pristine
+      baseline (1597.9 vs. 1402.1) and its own gen2 parent (1582.7 vs.
+      1417.3), both PROMOTE. **This is now the best checkpoint overall**
+      — three chained generations, each a genuine strength win, zero
+      collapse at every step. See `docs/SELF_PLAY_STABILITY.md` section
+      21. Not yet exported to `.tflite` or verified on-device — Phase 4
+      below only did that for gen2 so far.
 - [ ] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`), not shipped automatically
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate
@@ -400,5 +411,10 @@ scheduling, session length) is still to be decided — revisit when Phase
       0 failures, ran in 0.103s. First real self-play-trained Ray-zeroGo
       checkpoint confirmed working under Android's actual on-device
       TFLite runtime, not just desktop/WSL Python.
+- [ ] Export `bootstrap_gen3_no_pass_guard_candidate.pt` (the actual best
+      checkpoint as of 2026-09-05 — see Phase 3 above) to `.tflite` and
+      verify it on-device the same way gen2 was; gen2 was only exported
+      first as the initial "does the pipeline work" check, not because
+      it's the strongest available checkpoint.
 - [ ] Hand off checkpoints + Elo metadata to the app for the difficulty
       picker and optional Elo-over-generations chart
