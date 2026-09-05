@@ -411,10 +411,16 @@ scheduling, session length) is still to be decided — revisit when Phase
       0 failures, ran in 0.103s. First real self-play-trained Ray-zeroGo
       checkpoint confirmed working under Android's actual on-device
       TFLite runtime, not just desktop/WSL Python.
-- [ ] Export `bootstrap_gen3_no_pass_guard_candidate.pt` (the actual best
-      checkpoint as of 2026-09-05 — see Phase 3 above) to `.tflite` and
-      verify it on-device the same way gen2 was; gen2 was only exported
-      first as the initial "does the pipeline work" check, not because
-      it's the strongest available checkpoint.
+- [x] **Exported and verified `bootstrap_gen3_no_pass_guard_candidate.pt`
+      on-device (2026-09-06):** `export/ray_zero_gen3_no_pass_guard.tflite`,
+      numerically verified against the source checkpoint (max policy diff
+      ~2.2e-7, value diff ~3.6e-7 — float32 rounding noise). Copied into
+      `igo-app/app/src/main/assets/models/` alongside gen2 (kept as
+      separate assets — both are intended as difficulty tiers, not a
+      replacement of one by the other). `RayZeroModelOnDeviceTest`
+      extended to cover both checkpoints: 2 tests, 0 failures on
+      `MinSdk_API24`.
 - [ ] Hand off checkpoints + Elo metadata to the app for the difficulty
-      picker and optional Elo-over-generations chart
+      picker and optional Elo-over-generations chart — gen2 and gen3 are
+      both in place as a first two-tier spread; the app-side picker UI
+      itself doesn't exist yet (see `igo-app/docs/ROADMAP.md` Phase 4).
