@@ -1,0 +1,22 @@
+# Re-run of selfplay_self_play_gen1_noise_fix.yaml with temperature annealing added
+# (2026-09-04, see docs/SELF_PLAY_STABILITY.md section 13): temperature_drop_move=30
+# matches AlphaZero's own schedule (temperature=1 for the first ~30 plies, then greedy
+# for the rest). Tests whether this fixes the fine-tune wash (section 13) without
+# reopening the pass-collapse fix (sections 11-12) -- the collapse lives in the opening,
+# still fully covered by temperature=1 exploration below move 30.
+
+checkpoint_path: checkpoints/bootstrap_batch2_residual.pt
+board_size: 9
+komi: 7.5
+seed: 20260903
+
+num_games: 100
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen1_temp_anneal.npz

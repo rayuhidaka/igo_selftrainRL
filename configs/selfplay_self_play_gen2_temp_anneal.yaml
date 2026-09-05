@@ -1,0 +1,25 @@
+# Generation 2's self-play data using the fully-fixed pipeline: root noise excluding
+# Pass (alpha=0.1) plus temperature annealing (temperature_drop_move=30), chained from
+# bootstrap_gen1_temp_anneal_candidate.pt -- the genuinely-strong gen1 candidate (PROMOTE,
+# 1726.1 vs 1273.9, see docs/SELF_PLAY_STABILITY.md section 15), not the wash-y
+# bootstrap_gen1_noise_fix_candidate.pt used in section 14's gen2 test (which saw
+# compounding to 23% short games from gen1's 6%).
+#
+# Tests the untested hypothesis from section 14: does a cleaner, real-strength-win gen1
+# candidate also reduce gen2's compounding, not just fix the single-generation wash?
+
+checkpoint_path: checkpoints/bootstrap_gen1_temp_anneal_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260904
+
+num_games: 100
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen2_temp_anneal.npz

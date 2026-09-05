@@ -1,0 +1,32 @@
+# Generation 2's fine-tune, chained from bootstrap_gen1_no_pass_guard_candidate.pt (warm
+# start) -- the checkpoint that came back 0/100 short games in its own self-play
+# generation and a confirmed real strength win (PROMOTE 1543.0 vs 1457.0 with the fixed
+# eval). Same 25/75 mix recipe as every prior gen1/gen2 candidate: 25% broad anchor
+# (batch2.npz), 75% new self-play (self_play_gen2_no_pass_guard.npz, also 0/100 short
+# games -- see docs/SELF_PLAY_STABILITY.md section 19).
+#
+# This completes the chaining test's loop: section 19 confirmed generation 2's
+# self-play *generation* step is clean; this checks whether the resulting fine-tune is
+# also a genuine strength win, not just collapse-free.
+
+board_size: 9
+seed: 9
+init_from_checkpoint: checkpoints/bootstrap_gen1_no_pass_guard_candidate.pt
+
+checkpoint_out: checkpoints/bootstrap_gen2_no_pass_guard_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.25
+  - path: selfplay_games/self_play_gen2_no_pass_guard.npz
+    weight: 0.75
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_gen2_no_pass_guard_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

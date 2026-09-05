@@ -1,0 +1,26 @@
+# Generation 2's self-play data using the noise-fix pipeline throughout --
+# same settings as configs/selfplay_self_play_gen1_noise_fix.yaml, but using
+# bootstrap_gen1_noise_fix_candidate.pt (chained from generation 1, see
+# configs/bootstrap_train_gen1_noise_fix_candidate.yaml) instead of the
+# original pristine checkpoint. This is the actual test docs/SELF_PLAY_STABILITY.md
+# sections 11-13 have been building toward: does empty-board Pass probability
+# stay low across a chained generation now, instead of compounding the way it
+# did in the original gen1->gen2 collapse (section 5)? Note: gen1's candidate
+# was a strength wash, not a win (section 13) -- this run tests *stability*
+# (Pass probability / short-game rate) regardless of that, per the decision
+# in section 13's open items.
+
+checkpoint_path: checkpoints/bootstrap_gen1_noise_fix_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260904
+
+num_games: 100
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen2_noise_fix.npz

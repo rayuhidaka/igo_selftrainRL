@@ -315,23 +315,35 @@ scheduling, session length) is still to be decided — revisit when Phase
       retune the mix, move to a true continuous replay-buffer loop, or
       accept the single-generation result as Phase 3's current
       deliverable) rather than keep varying parameters blindly.
-- [ ] **Tried "harden self-play data quality further" — revealed the
-      bias is pervasive, not resolved (2026-09-03, stopped here for the
-      day):** new `max_mid_game_pass_weight` filter in
-      `selfplay/self_play.py` catches a game carrying the collapse
-      dynamic in one non-terminal position even if it doesn't end the
-      game outright (the old `min_moves_to_keep` alone couldn't).
-      Regenerating generation 2's self-play with both filters active
-      found 89/100 games had detectable Pass bias somewhere (41 too
-      short + 48 more with elevated mid-game Pass weight) — only 11
-      games (779 examples) survived. Too little data to confidently
-      fine-tune on. **Next session starts here:** decide between
-      generating a much larger raw self-play batch so the same ~11%
-      survival rate still yields workable data (cheap, try first), or
-      treating this as a sign that filtering self-play *output* has hit
-      diminishing returns and the checkpoint's own value calibration
-      needs more direct attention. Full detail:
-      `docs/SELF_PLAY_STABILITY.md` section 10.
+- [x] **Root-caused and fixed the chaining collapse for real (2026-09-04
+      into 2026-09-05) — full detail in `docs/SELF_PLAY_STABILITY.md`
+      sections 11-20, this is the summary:** the earlier filtering-only
+      approach (above) revealed the bias was pervasive (89/100 games
+      affected), not just rare bad luck — filtering *output* had hit
+      diminishing returns. Root cause: `mcts/mcts.py` had no root
+      exploration noise and a low simulation budget, a known AlphaZero
+      pathology. Fixed in stages: root Dirichlet noise excluding `Pass`
+      from the noise draw (naively including it made things *worse*,
+      not better — noise landing on `Pass` sent real search budget down
+      the poorly-calibrated post-pass branch), `alpha=0.1` tuned for
+      9x9's branching factor (not AlphaZero's 19x19 value of 0.03),
+      temperature annealing after move 30 (fixed a separate fine-tune
+      quality wash this uncovered), and finally a structural
+      `no_pass_before_move=20` guard — the fix that actually closed the
+      remaining chaining gap. Also fixed two unrelated but significant
+      bugs found along the way: an ~85x self-play performance bug
+      (PyTorch thread oversubscription) and an eval-methodology bug
+      (`eval/promote.py`'s "40-game matches" were actually only 2 unique
+      deterministic games repeated 20x each, undermining the
+      statistical confidence of every promotion decision in the
+      project's history). **Final result: both generation 1 and a real
+      chained generation 2 came back 0/100 short/collapsed games, and
+      generation 2 is a confirmed genuine strength win over both the
+      pristine baseline and its own generation-1 parent** —
+      `bootstrap_gen2_no_pass_guard_candidate.pt` is the current best
+      checkpoint. The healthy AlphaZero-style improvement loop this
+      phase was always meant to produce is now actually working end to
+      end.
 - [ ] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`), not shipped automatically
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate
@@ -359,6 +371,34 @@ scheduling, session length) is still to be decided — revisit when Phase
       Phase 2 actually happening.
 
 ## Phase 4 — Handoff to igo-app
-- [ ] Export selected checkpoints to `.tflite` (`export/`)
+- [x] **First real self-trained checkpoint exported (2026-09-05):**
+      `python -m export.to_tflite --checkpoint checkpoints/bootstrap_gen2_no_pass_guard_candidate.pt
+      --board-size 9 --out export/ray_zero_gen2_no_pass_guard.tflite` —
+      tensors match `igo-app/docs/MODEL_CONTRACT.md` exactly
+      (`board_planes [1,9,9,3]` in, `policy [1,82]`/`value [1,1]` out).
+      Numerically verified against the source PyTorch checkpoint: max
+      policy difference 0.000145 (0.0145%), value difference 2.4e-7 —
+      float32 rounding noise, not a conversion bug. First time this
+      pipeline has exported an actually self-trained, self-play-improved
+      Ray-zeroGo checkpoint (not just an untrained placeholder or a
+      Phase 2 imitation-only bootstrap) — see `docs/SELF_PLAY_STABILITY.md`
+      for how this checkpoint was produced. Not yet copied into
+      `igo-app`'s assets, loaded on-device, or wired into a difficulty
+      picker — see below.
+- [x] **Verified on-device (2026-09-05):** copied
+      `ray_zero_gen2_no_pass_guard.tflite` into
+      `igo-app/app/src/main/assets/models/`, wrote
+      `app/src/androidTest/kotlin/com/igoapp/app/RayZeroModelOnDeviceTest.kt`
+      (same pattern as the existing `KatagoModelOnDeviceTest`, but
+      without a specific-best-move assertion -- Ray-zeroGo is an early,
+      two-generations-in checkpoint, not a professional-strength engine,
+      so asserting a specific move would be presumptuous; this only
+      confirms the checkpoint loads and produces well-formed output).
+      Ran via
+      `.\gradlew.bat :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.igoapp.app.RayZeroModelOnDeviceTest`
+      on the `MinSdk_API24` emulator (see `docs/BUILD_NOTES.md`): 1 test,
+      0 failures, ran in 0.103s. First real self-play-trained Ray-zeroGo
+      checkpoint confirmed working under Android's actual on-device
+      TFLite runtime, not just desktop/WSL Python.
 - [ ] Hand off checkpoints + Elo metadata to the app for the difficulty
       picker and optional Elo-over-generations chart

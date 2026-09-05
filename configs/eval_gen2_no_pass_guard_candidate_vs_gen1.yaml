@@ -1,0 +1,12 @@
+# Does generation 2's fine-tune actually improve on its own generation-1 parent
+# (bootstrap_gen1_no_pass_guard_candidate.pt), the real test of whether chaining
+# compounds strength rather than just avoiding collapse? Same settings as every prior
+# comparison, using the fixed (randomized) eval methodology.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_gen1_no_pass_guard_candidate.pt
+min_elo_gap: 50

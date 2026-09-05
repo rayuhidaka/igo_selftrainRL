@@ -10,6 +10,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 from engine.move import Move, Pass
 from engine.position import Position
 from engine.scoring import area_score
@@ -28,6 +30,35 @@ class MctsConfig:
 
     komi: float = 7.5
     """Komi added to white's `AreaScore` when a search reaches a finished game."""
+
+    root_dirichlet_alpha: float = 0.1
+    """Concentration parameter for the Dirichlet noise mixed into the root's priors -- only has
+    an effect when `root_dirichlet_epsilon` is nonzero. AlphaZero's own value for 19x19 Go is
+    0.03, but that's tuned for 19x19's ~250+ opening legal moves, not 9x9's ~82 -- the standard
+    heuristic is `alpha ~= 10 / average legal moves` (why chess uses 0.3, shogi 0.15, 19x19 Go
+    0.03), which lands around 0.1-0.12 for 9x9. Naively reusing 0.03 here (2026-09-04, see
+    docs/SELF_PLAY_STABILITY.md) produced noise so peaked it dumped nearly all its mass onto
+    one random board move and left the rest -- Pass included, even though Pass itself is
+    excluded from the noise draw (see `root_dirichlet_epsilon`'s docstring) -- with near-zero
+    *effective* priors after mixing, letting Pass win root selection by its competitors being
+    suppressed rather than by being boosted itself. `0.1` measured meaningfully better on this
+    board (5% vs. 10% short/collapsed self-play games at the same `root_dirichlet_epsilon`,
+    smoke-tested at n=20 -- see the doc above before assuming this is the final word).
+    """
+
+    root_dirichlet_epsilon: float = 0.0
+    """Weight given to root Dirichlet noise vs. the net's own prior, `0.0` (the default) meaning
+    no noise -- i.e. `Mcts.search`'s existing, unchanged behavior. Self-play data generation
+    should pass a nonzero value (AlphaZero's own default is `0.25`); this exists to fix a real
+    diagnosed bug (see docs/SELF_PLAY_STABILITY.md): with zero root noise and a low simulation
+    budget, a checkpoint's own slightly-elevated Pass prior gets over-visited by search with no
+    mechanism to correct it, and training on the resulting visit counts pushes the *next*
+    checkpoint's prior even higher -- a multiplicative feedback loop across self-play
+    generations. Left at `0.0` for `eval/match.py` and the Android app's live analysis search,
+    where the goal is the engine's actual best move, not exploration -- so this is
+    deliberately NOT mirrored to `igo-app/mcts/src/main/kotlin/.../Mcts.kt`, unlike this file's
+    other config knobs.
+    """
 
 
 @dataclass(frozen=True)
@@ -74,9 +105,12 @@ class Mcts:
     `engine.scoring.area_score` and `MctsConfig.komi` instead of being evaluated by the net.
     """
 
-    def __init__(self, net: PolicyValueNet, config: MctsConfig = MctsConfig()) -> None:
+    def __init__(
+        self, net: PolicyValueNet, config: MctsConfig = MctsConfig(), rng: np.random.Generator | None = None
+    ) -> None:
         self._net = net
         self._config = config
+        self._rng = rng if rng is not None else np.random.default_rng()
 
     def search(self, root: Position) -> SearchResult:
         """Runs `config.num_simulations` simulations from `root` and returns the resulting
@@ -86,7 +120,7 @@ class Mcts:
         """
         root_node = _Node(prior=1.0)
         for _ in range(self._config.num_simulations):
-            self._simulate(root_node, root)
+            self._simulate(root_node, root, is_root=True)
         return SearchResult(
             move_visits={move: child.visit_count for move, child in root_node.children.items()},
             root_value=root_node.mean_value,
@@ -99,7 +133,7 @@ class Mcts:
             return Pass()
         return max(result.move_visits.items(), key=lambda item: item[1])[0]
 
-    def _simulate(self, node: _Node, position: Position) -> float:
+    def _simulate(self, node: _Node, position: Position, is_root: bool = False) -> float:
         """Runs one simulation from `node`/`position` and returns its value from the
         perspective of `position.to_play` -- i.e. how good this position is for whoever is
         about to move here. Also records that value into `node`'s own visit statistics.
@@ -107,19 +141,48 @@ class Mcts:
         if self._is_terminal(position):
             value = self._terminal_value(position)
         elif not node.children:
-            value = self._expand(node, position)
+            value = self._expand(node, position, is_root=is_root)
         else:
             move, child = self._select_child(node)
             value = -self._simulate(child, position.play(move))
         node.record_visit(value)
         return value
 
-    def _expand(self, node: _Node, position: Position) -> float:
-        """Evaluates `position` with `net`, creates one child per legal move, and returns the net's value."""
+    def _expand(self, node: _Node, position: Position, is_root: bool = False) -> float:
+        """Evaluates `position` with `net`, creates one child per legal move, and returns the
+        net's value. `is_root` mixes `MctsConfig.root_dirichlet_epsilon` noise into the priors
+        when set (see that field's docstring) -- this only ever fires on a node's first
+        expansion, so it naturally applies exactly once per `search` call, to the root only.
+        """
         evaluation = self._net.evaluate(position)
-        for move, prior in evaluation.policy.items():
+        priors = evaluation.policy
+        if is_root and self._config.root_dirichlet_epsilon > 0:
+            priors = self._add_root_noise(priors)
+        for move, prior in priors.items():
             node.children[move] = _Node(prior)
         return evaluation.value
+
+    def _add_root_noise(self, priors: dict[Move, float]) -> dict[Move, float]:
+        """Mixes Dirichlet noise into `priors`, weighted by `MctsConfig.root_dirichlet_epsilon`
+        -- over the board-play moves only, deliberately excluding `Pass` (2026-09-04, see
+        docs/SELF_PLAY_STABILITY.md and memory `self_play_root_noise_pass_bias`). A batch
+        test showed noise-including-Pass made short/collapsed games *more* common (35-40%
+        vs. a 1% no-noise baseline on the same checkpoint), not less: with a peaked
+        `alpha`, a noise draw usually dumps nearly all its mass on one random action, and
+        roughly 1-in-`len(priors)` times that's Pass -- sending real search budget down the
+        post-pass branch, a state this net's value head is poorly calibrated on precisely
+        because passing was rare in its own training data. That's the exact collapse this
+        noise was meant to fix, just relocated. Leaving Pass's own net-derived prior alone
+        keeps noise's intended benefit (varied board-play exploration) without reopening
+        that hole.
+        """
+        board_moves = [move for move in priors if not isinstance(move, Pass)]
+        noise = self._rng.dirichlet([self._config.root_dirichlet_alpha] * len(board_moves))
+        epsilon = self._config.root_dirichlet_epsilon
+        result = dict(priors)
+        for move, sample in zip(board_moves, noise):
+            result[move] = (1 - epsilon) * priors[move] + epsilon * sample
+        return result
 
     def _select_child(self, node: _Node) -> tuple[Move, _Node]:
         """Picks `node`'s child maximizing the PUCT score, from `node`'s own player-to-move's perspective."""

@@ -1,0 +1,40 @@
+# Fine-tunes bootstrap_batch2_residual.pt (warm start) on the self-play batch
+# generated with the root-noise pass-collapse fix (2026-09-04, see
+# docs/SELF_PLAY_STABILITY.md sections 11-12): root_dirichlet_epsilon=0.25
+# excluding Pass, alpha=0.1 (tuned for 9x9, not 19x19's 0.03), num_simulations=400.
+# That batch (self_play_gen1_noise_fix.npz, 8,708 examples, 6% short/collapsed
+# games vs. the original pipeline's 1% and the broken noise-on-Pass version's
+# 35-40%) replaces self_play_gen1.npz as this generation's self-play data.
+#
+# Same 25/75 mix recipe as bootstrap_train_gen1_candidate.yaml's v4 -- the
+# proven fix for the original chaining collapse (PROMOTE, 40-0, stable at
+# 1.22% empty-board Pass probability). Reusing it unmodified here isolates the
+# effect of the new self-play data/fix; only the self-play source path and
+# output names change.
+#
+# Purpose: this candidate becomes generation 2's self-play source, to test
+# whether chaining is now actually stable end to end (the original point of
+# today's whole investigation) -- not just that a single generation's self-play
+# batch looks clean in isolation.
+
+board_size: 9
+seed: 9
+init_from_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+
+checkpoint_out: checkpoints/bootstrap_gen1_noise_fix_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.25
+  - path: selfplay_games/self_play_gen1_noise_fix.npz
+    weight: 0.75
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_gen1_noise_fix_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

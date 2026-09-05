@@ -1,0 +1,12 @@
+# Does one generation of fine-tuning on the fully-fixed self-play batch (root noise
+# excluding Pass + temperature annealing + no_pass_before_move guard,
+# bootstrap_gen1_no_pass_guard_candidate.pt) play better than the checkpoint it came
+# from? Same 40-games/50-sims settings as every prior architecture comparison.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+min_elo_gap: 50

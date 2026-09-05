@@ -1,0 +1,15 @@
+# Does one generation of fine-tuning on the noise-fixed self-play batch
+# (bootstrap_gen1_noise_fix_candidate.pt, see
+# configs/bootstrap_train_gen1_noise_fix_candidate.yaml and
+# docs/SELF_PLAY_STABILITY.md sections 11-12) actually play better than the
+# checkpoint it came from? Same 40-games/50-sims settings as every prior
+# architecture comparison -- see configs/eval_batch2wide_vs_batch2.yaml's
+# comment for why.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+min_elo_gap: 50

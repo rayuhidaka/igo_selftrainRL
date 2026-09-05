@@ -1,0 +1,15 @@
+# Does one generation of fine-tuning on the temperature-annealed self-play batch
+# (bootstrap_gen1_temp_anneal_candidate.pt, see
+# configs/bootstrap_train_gen1_temp_anneal_candidate.yaml and
+# docs/SELF_PLAY_STABILITY.md section 13) fix the fine-tune wash seen without
+# annealing (1491.8 vs. parent's 1508.2, do not promote)? Same
+# 40-games/50-sims settings as every prior architecture comparison -- see
+# configs/eval_batch2wide_vs_batch2.yaml's comment for why.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+min_elo_gap: 50

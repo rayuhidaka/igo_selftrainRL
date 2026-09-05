@@ -30,6 +30,30 @@ ending the game outright -- length alone doesn't catch it. Discards any game whe
 recorded position outside the final two (which legitimately precede the game's own closing
 double-pass, and are supposed to favor Pass heavily) exceeds this Pass-weight threshold.
 
+`config["root_dirichlet_epsilon"]`/`config["root_dirichlet_alpha"]` (default `0.0`/`0.1`,
+i.e. no noise when `root_dirichlet_epsilon` is left at 0, matching `MctsConfig`'s own
+defaults) address the diagnosed root cause of the above rather than just filtering its
+symptoms out of the saved data -- see `MctsConfig.root_dirichlet_epsilon`'s docstring and
+docs/SELF_PLAY_STABILITY.md. Should be set nonzero (`epsilon=0.25` is AlphaZero's own
+self-play value; `alpha=0.1`, not AlphaZero's 19x19 value of 0.03, is tuned for 9x9's much
+smaller branching factor) for any self-play run whose data will get chained into a
+fine-tune, since `min_moves_to_keep`/`max_mid_game_pass_weight` alone only discard
+collapse once it's already happened, generation over generation.
+
+`config["temperature_drop_move"]` (default `None`, i.e. `temperature` applies for the
+whole game) anneals move selection to greedy/argmax after that many moves, matching
+AlphaZero's own schedule -- see `play_one_game`'s docstring and docs/SELF_PLAY_STABILITY.md
+section 13. Fixes a *different* problem than the noise/collapse settings above: a flat
+temperature degrades training-data quality throughout the whole game, not just the opening
+where the collapse fix's exploration is actually needed.
+
+`config["no_pass_before_move"]` (default `None`, i.e. `Pass` is always a candidate) masks
+`Pass` out of the recorded policy target and the actually-played move while below that
+move count -- see `play_one_game`'s docstring and docs/SELF_PLAY_STABILITY.md section 17.
+A hard structural guarantee against the Pass-collapse pattern (every collapse observed so
+far happens at or below move 20; legitimate games never finish before move 42), rather
+than the probabilistic nudges above.
+
 Usage:
     python -m selfplay.self_play --config configs/selfplay_self_play_smoke_test.yaml
 """
@@ -40,8 +64,10 @@ import argparse
 import random
 import time
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
+import torch
 import yaml
 
 from bootstrap.dataset import SelfPlayExamples
@@ -96,20 +122,56 @@ def has_suspicious_mid_game_pass(
 
 
 def play_one_game(
-    mcts: Mcts, board_size: int, komi: float, temperature: float, max_moves: int, rng: random.Random
+    mcts: Mcts,
+    board_size: int,
+    komi: float,
+    temperature: float,
+    max_moves: int,
+    rng: random.Random,
+    temperature_drop_move: Optional[int] = None,
+    no_pass_before_move: Optional[int] = None,
 ) -> tuple[list[tuple[np.ndarray, np.ndarray, Stone]], "Stone | None", AreaScore]:
     """Plays one self-play game and returns `(records, winner, final_area)`, where `records`
     has one `(board_planes, policy_target, to_play)` tuple per move played.
+
+    `temperature_drop_move` (default `None`, meaning `temperature` applies for the whole
+    game -- the original, unannealed behavior) switches to greedy move selection
+    (`sample_move`'s `temperature<=0` branch) once `moves_played` reaches it, matching
+    AlphaZero's own schedule (`temperature=1` for the first ~30 plies, then ~0 for the
+    rest). Added 2026-09-04 (see docs/SELF_PLAY_STABILITY.md section 13): a flat
+    `temperature=1.0` for the entire game -- not just the opening, where exploration
+    actually matters for avoiding the Pass-collapse this module's other filters and
+    `Mcts`'s root noise guard against -- adds move-quality-degrading randomness deep into
+    already-decided positions, diluting training-data quality generation over generation.
+
+    `no_pass_before_move` (default `None`, meaning `Pass` is always a candidate) masks
+    `Pass` out of the recorded policy target and out of the moves `sample_move` can choose
+    while `moves_played` is below it -- a hard structural guarantee against the
+    Pass-collapse pattern, rather than another probabilistic nudge like root noise or
+    temperature. Added 2026-09-05 (see docs/SELF_PLAY_STABILITY.md section 17): every
+    collapse inspected so far happened at or below move 20, and this project's own
+    legitimate games never finish before move 42 (`has_suspicious_mid_game_pass`'s
+    docstring), so masking Pass below move 20 cannot suppress a real, correct early
+    finish -- it can only ever block the collapse pattern itself. `Mcts` still spends
+    simulations however PUCT directs (including on `Pass`, if search wants to try it) --
+    only the recorded training target and the actually-played move are masked, so this
+    doesn't touch `Mcts`'s search mechanics or `MctsConfig` at all.
     """
     position = Position.empty(board_size)
     records: list[tuple[np.ndarray, np.ndarray, Stone]] = []
     moves_played = 0
     while position.pass_count < 2 and moves_played < max_moves:
         result = mcts.search(position)
-        policy_target = visit_count_policy(board_size, result.move_visits)
+        move_visits = result.move_visits
+        if no_pass_before_move is not None and moves_played < no_pass_before_move:
+            move_visits = {move: visits for move, visits in move_visits.items() if not isinstance(move, Pass)}
+        policy_target = visit_count_policy(board_size, move_visits)
         records.append((encode_planes(position).numpy(), policy_target, position.to_play))
 
-        move = sample_move(board_size, policy_target, temperature, rng)
+        effective_temperature = (
+            temperature if temperature_drop_move is None or moves_played < temperature_drop_move else 0.0
+        )
+        move = sample_move(board_size, policy_target, effective_temperature, rng)
         position = position.play(move)
         moves_played += 1
 
@@ -123,6 +185,15 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     args = parser.parse_args()
     config = yaml.safe_load(args.config.read_text())
+
+    # PyTorch's default thread pool (one thread per CPU core) is sized for large batched
+    # ops; MCTS instead calls net.evaluate() on a single board position, sequentially,
+    # hundreds of times per move -- for a tensor that small, thread synchronization
+    # overhead dominates actual compute (measured 2026-09-04: ~247ms/eval at 16 threads
+    # vs. ~3ms/eval at 1, an ~85x difference on this machine). Set once, before any
+    # inference happens; override via config["torch_num_threads"] if a given machine
+    # benchmarks differently.
+    torch.set_num_threads(config.get("torch_num_threads", 1))
 
     board_size = config["board_size"]
     komi = config.get("komi", 7.5)
@@ -140,6 +211,8 @@ def main() -> None:
         num_simulations=config.get("num_simulations", MctsConfig().num_simulations),
         exploration_constant=config.get("exploration_constant", MctsConfig().exploration_constant),
         komi=komi,
+        root_dirichlet_alpha=config.get("root_dirichlet_alpha", MctsConfig().root_dirichlet_alpha),
+        root_dirichlet_epsilon=config.get("root_dirichlet_epsilon", MctsConfig().root_dirichlet_epsilon),
     )
     mcts = Mcts(net, mcts_config)
     rng = random.Random(config["seed"])
@@ -158,7 +231,14 @@ def main() -> None:
     games_played = 0
     for game_index in range(config["num_games"]):
         records, winner, final_area = play_one_game(
-            mcts, board_size, komi, config["temperature"], config["max_moves"], rng
+            mcts,
+            board_size,
+            komi,
+            config["temperature"],
+            config["max_moves"],
+            rng,
+            temperature_drop_move=config.get("temperature_drop_move"),
+            no_pass_before_move=config.get("no_pass_before_move"),
         )
 
         # A real MCTS-searched game ending in only a handful of moves (both players passing

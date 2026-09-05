@@ -8,6 +8,8 @@ from __future__ import annotations
 import unittest
 from typing import Callable
 
+import numpy as np
+
 from engine.move import Move, Pass, Play
 from engine.point import Point
 from engine.position import Position
@@ -138,6 +140,46 @@ class MctsTest(unittest.TestCase):
 
         self.assertGreater(visits[Pass()], visits[Play(Point(1, 2))])
         self.assertEqual(Pass(), mcts.select_move(position))
+
+    def test_root_dirichlet_noise_is_a_no_op_when_epsilon_is_zero(self) -> None:
+        # MctsConfig's default -- confirms opting into noise is required, not automatic.
+        center = Play(Point(1, 1))
+        net = FakePolicyValueNet(policy=lambda position: _skewed_policy(position, center, favored_prior=0.9))
+        with_default_config = Mcts(net, MctsConfig(num_simulations=200), rng=np.random.default_rng(1))
+        without_rng_at_all = Mcts(net, MctsConfig(num_simulations=200))
+
+        self.assertEqual(center, with_default_config.select_move(Position.empty(3)))
+        self.assertEqual(center, without_rng_at_all.select_move(Position.empty(3)))
+
+    def test_root_dirichlet_noise_changes_which_move_search_favors(self) -> None:
+        # With epsilon=1.0 the net's own prior is fully replaced by root noise, so which move
+        # ends up favored is determined entirely by the noise sample -- a low alpha (peaked
+        # Dirichlet) on a 2x2 board's 5 legal moves means different seeds should almost always
+        # favor different moves, proving root_dirichlet_epsilon actually reaches search.
+        position = Position.empty(2)
+        config = MctsConfig(num_simulations=200, root_dirichlet_epsilon=1.0, root_dirichlet_alpha=0.03)
+
+        move_a = Mcts(FakePolicyValueNet(), config, rng=np.random.default_rng(1)).select_move(position)
+        move_b = Mcts(FakePolicyValueNet(), config, rng=np.random.default_rng(2)).select_move(position)
+
+        self.assertNotEqual(move_a, move_b)
+
+    def test_root_dirichlet_noise_never_touches_pass(self) -> None:
+        # A noise draw landing on Pass can send real search budget down the post-pass
+        # branch even when Pass legitimately has near-zero prior -- exactly the collapse
+        # this noise was added to fix, just relocated (see docs/SELF_PLAY_STABILITY.md and
+        # memory self_play_root_noise_pass_bias). Pass's own prior must survive untouched
+        # regardless of epsilon/alpha, across many seeds, to rule out this by chance.
+        position = Position.empty(2)
+        config = MctsConfig(root_dirichlet_epsilon=1.0, root_dirichlet_alpha=0.03)
+        net = FakePolicyValueNet()
+        priors = net.evaluate(position).policy
+        pass_prior = priors[Pass()]
+
+        for seed in range(50):
+            mcts = Mcts(net, config, rng=np.random.default_rng(seed))
+            noisy = mcts._add_root_noise(priors)
+            self.assertEqual(pass_prior, noisy[Pass()])
 
 
 if __name__ == "__main__":

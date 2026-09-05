@@ -63,6 +63,56 @@ class PlayMatchTest(unittest.TestCase):
             average_score_a = sum(r.score_a for r in results) / len(results)
             self.assertAlmostEqual(average_score_a, 0.5, delta=0.05)
 
+    def test_temperature_makes_a_match_more_than_two_unique_games(self) -> None:
+        # Before this fix (see eval/match.py's docstring and
+        # docs/SELF_PLAY_STABILITY.md), temperature=0.0 (the default) meant every game
+        # with the same color assignment was bit-for-bit identical -- a "match" was really
+        # just 2 unique games repeated num_games/2 times each, giving eval/elo.py's rating
+        # update the same fixed endpoint for any clean sweep regardless of which
+        # checkpoints were being compared. With temperature>0, the games sharing a color
+        # assignment should no longer be forced identical -- a checkpoint played against
+        # itself (so win/loss is a real toss-up, not one side simply dominating) should
+        # show a genuine mix of outcomes, not always the same one repeated.
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint = Path(tmp) / "same.pt"
+            _save_untrained_checkpoint(checkpoint, seed=3)
+
+            results = play_match(
+                checkpoint,
+                checkpoint,
+                board_size=_BOARD_SIZE,
+                num_games=10,
+                num_simulations=_NUM_SIMULATIONS,
+                temperature=1.0,
+                temperature_drop_move=4,
+                seed=1,
+            )
+
+            a_plays_black_scores = [r.score_a for i, r in enumerate(results) if i % 2 == 0]
+            self.assertGreater(len(set(a_plays_black_scores)), 1)
+
+    def test_temperature_with_a_seed_is_reproducible(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint_a = Path(tmp) / "a.pt"
+            checkpoint_b = Path(tmp) / "b.pt"
+            _save_untrained_checkpoint(checkpoint_a, seed=1)
+            _save_untrained_checkpoint(checkpoint_b, seed=2)
+
+            def play() -> list[float]:
+                results = play_match(
+                    checkpoint_a,
+                    checkpoint_b,
+                    board_size=_BOARD_SIZE,
+                    num_games=4,
+                    num_simulations=_NUM_SIMULATIONS,
+                    temperature=1.0,
+                    temperature_drop_move=2,
+                    seed=7,
+                )
+                return [r.score_a for r in results]
+
+            self.assertEqual(play(), play())
+
 
 if __name__ == "__main__":
     unittest.main()

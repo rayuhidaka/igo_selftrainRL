@@ -1,0 +1,27 @@
+# Generation 3's self-play data, chained from bootstrap_gen2_no_pass_guard_candidate.pt --
+# the checkpoint that beat both the pristine baseline and its own gen1 parent (see
+# docs/SELF_PLAY_STABILITY.md section 20). Same full fix stack as gen1/gen2: root noise
+# excluding Pass (alpha=0.1), temperature annealing (temperature_drop_move=30), and the
+# structural no_pass_before_move=20 guard.
+#
+# Purpose: gen1 and gen2 both came back 0/100 short games and each beat its predecessor
+# in strength -- this tests whether that pattern continues into a third generation
+# (extra confidence on stability, and the more open question of whether strength keeps
+# compounding or plateaus).
+
+checkpoint_path: checkpoints/bootstrap_gen2_no_pass_guard_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260905
+
+num_games: 100
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen3_no_pass_guard.npz

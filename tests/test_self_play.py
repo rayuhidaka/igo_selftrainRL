@@ -102,6 +102,68 @@ class PlayOneGameTest(unittest.TestCase):
             self.assertIn(to_play.name, ("BLACK", "WHITE"))
         self.assertTrue(winner is None or winner.name in ("BLACK", "WHITE"))
 
+    def test_temperature_drop_move_makes_move_selection_deterministic(self) -> None:
+        # temperature_drop_move=0 drops to greedy (argmax) selection from the very first
+        # move -- sample_move's temperature<=0 branch ignores rng entirely, so two
+        # different seeds should then produce the exact same game. Confirms
+        # play_one_game actually anneals rather than ignoring the new parameter (see
+        # docs/SELF_PLAY_STABILITY.md section 13).
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint_path = Path(tmp) / "untrained.pt"
+            torch.manual_seed(1)
+            model = RayZeroNet(board_size=_BOARD_SIZE, channels=4, num_conv_layers=2)
+            save_checkpoint(
+                model,
+                CheckpointMetadata(board_size=_BOARD_SIZE, channels=4, num_conv_layers=2),
+                checkpoint_path,
+            )
+            net = RayZeroPolicyValueNet(checkpoint_path, _BOARD_SIZE)
+
+            def play(seed: int) -> list[list[float]]:
+                mcts = Mcts(net, MctsConfig(num_simulations=_NUM_SIMULATIONS))
+                records, _, _ = play_one_game(
+                    mcts,
+                    _BOARD_SIZE,
+                    komi=7.5,
+                    temperature=1.0,
+                    max_moves=6,
+                    rng=random.Random(seed),
+                    temperature_drop_move=0,
+                )
+                return [policy_target.tolist() for _, policy_target, _ in records]
+
+            self.assertEqual(play(0), play(1))
+
+    def test_no_pass_before_move_masks_pass_out_of_the_recorded_policy_target(self) -> None:
+        # A hard structural guarantee against the Pass-collapse pattern (see
+        # docs/SELF_PLAY_STABILITY.md section 17): Pass must carry exactly zero weight in
+        # every recorded policy target below the threshold, regardless of what MCTS itself
+        # searched.
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint_path = Path(tmp) / "untrained.pt"
+            torch.manual_seed(1)
+            model = RayZeroNet(board_size=_BOARD_SIZE, channels=4, num_conv_layers=2)
+            save_checkpoint(
+                model,
+                CheckpointMetadata(board_size=_BOARD_SIZE, channels=4, num_conv_layers=2),
+                checkpoint_path,
+            )
+            net = RayZeroPolicyValueNet(checkpoint_path, _BOARD_SIZE)
+            mcts = Mcts(net, MctsConfig(num_simulations=_NUM_SIMULATIONS))
+
+            records, _, _ = play_one_game(
+                mcts,
+                _BOARD_SIZE,
+                komi=7.5,
+                temperature=1.0,
+                max_moves=4,
+                rng=random.Random(0),
+                no_pass_before_move=4,
+            )
+
+        for _, policy_target, _ in records:
+            self.assertEqual(0.0, policy_target[-1])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,31 @@
+# Fine-tunes bootstrap_batch2_residual.pt (warm start) on the self-play batch generated
+# with the full fix stack: root noise excluding Pass (alpha=0.1), temperature annealing
+# (temperature_drop_move=30), and the structural no_pass_before_move=20 guard
+# (2026-09-05, see docs/SELF_PLAY_STABILITY.md section 17). That batch
+# (self_play_gen1_no_pass_guard.npz) came back 0/100 short games -- the cleanest of the
+# whole investigation.
+#
+# Same 25/75 mix recipe as every prior gen1 candidate config -- only the self-play
+# source path and output names change, to isolate the effect of this fix.
+
+board_size: 9
+seed: 9
+init_from_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+
+checkpoint_out: checkpoints/bootstrap_gen1_no_pass_guard_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.25
+  - path: selfplay_games/self_play_gen1_no_pass_guard.npz
+    weight: 0.75
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_gen1_no_pass_guard_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

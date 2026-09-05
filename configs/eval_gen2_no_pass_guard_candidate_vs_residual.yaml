@@ -1,0 +1,13 @@
+# Does generation 2's fine-tune (chained from bootstrap_gen1_no_pass_guard_candidate.pt,
+# see configs/bootstrap_train_gen2_no_pass_guard_candidate.yaml) play better than the
+# original pristine baseline? Same 40-games/50-sims settings as every prior comparison,
+# using the fixed (randomized) eval methodology -- see docs/SELF_PLAY_STABILITY.md
+# section 18.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+min_elo_gap: 50

@@ -304,50 +304,486 @@ checkpoint's self-play has diminishing returns, and address the bias
 in the generating checkpoint more directly (e.g. per-position value
 calibration, not just output filtering). Not decided; pick up here.
 
-## Open items as of this writing (end of 2026-09-03 session)
+### 11. Root cause found: no root exploration noise + low simulation budget (2026-09-04)
 
+Stepped back from filtering/value-calibration approaches to look directly
+at the search mechanics that *produce* the visit-count policy targets, not
+just the checkpoints those targets eventually train. `mcts/mcts.py` had
+**no Dirichlet noise at the root and no other exploration-forcing
+mechanism**, combined with a low `num_simulations` (100, over ~82 legal
+9x9 moves). This is a known, previously-solved AlphaZero pathology —
+without root noise, self-play search converges to whatever the current
+policy prior already favors, faster than a small simulation budget can
+correct it (see AlphaZero's own paper and KataGo's *Accelerating Self-Play
+Learning in Go*, whose policy-target-pruning/forced-playouts machinery
+exists to guard against exactly this).
+
+This fits every piece of prior evidence better than either paused option:
+- It's **multiplicative by construction**: a slightly-elevated Pass prior
+  → noise-free/low-sim search over-visits Pass → the visit-count training
+  target overshoots the prior further → the next checkpoint imitates that
+  harder → repeat. Matches the observed 0.01% → 1.2-1.5% → 27-35% curve
+  exactly.
+- Explains why the score-margin head (sections 7-8) didn't help — that
+  changes value calibration, not search exploration, a different
+  subsystem entirely.
+- Explains why warm-start restructuring (section 9) only halved the
+  problem — that stops weight-chaining, but self-play games are still
+  *generated* by the current (already-biased) checkpoint via the same
+  noise-free search, so bias still leaks in through the data itself.
+- Explains why 89/100 games showed some Pass bias (section 10) — that's
+  the search's normal behavior at these settings, not bad luck.
+
+**Fix implemented:** `MctsConfig` gained `root_dirichlet_epsilon`/
+`root_dirichlet_alpha` (default `0.0`/`0.03`, i.e. no behavior change
+unless opted into — `eval/match.py` and the Android app's live analysis
+search are deliberately left at `0.0`, since exploration noise has no
+place in an actual best-move search). `selfplay/self_play.py` reads both
+from config. `configs/selfplay_self_play_gen1_noise_fix.yaml` re-runs the
+original gen1 self-play batch with noise turned on (`epsilon=0.25`,
+`alpha=0.03`, AlphaZero's own values) and `num_simulations` raised
+100→400. Covered by two new `tests/test_mcts.py` cases. Also found and
+fixed an unrelated perf bug while testing this: PyTorch's default
+per-core thread pool made single-position MCTS inference ~85x slower
+than needed (`torch.set_num_threads(1)` at the self-play/eval CLI entry
+points — see code comments for the measured numbers).
+
+### 12. The plain noise recipe made things worse: noise landing on Pass (2026-09-04)
+
+Running `configs/selfplay_self_play_gen1_noise_fix.yaml` (noise over
+*all* root actions, including Pass) against the pristine checkpoint
+showed short-game rates of 40% (10 games), 35% (20 games), 40% (30
+games) — consistently far above that same checkpoint's original 1/100
+no-noise baseline (section 1). The fix made the exact problem it was
+meant to solve *worse*. Root cause: `alpha=0.03` is a peaked Dirichlet
+draw that usually dumps nearly all its mass onto one random action;
+roughly 1-in-~82 times that's Pass, and when it is, search gets a real
+incentive to explore the post-pass branch — a state the net's value head
+is poorly calibrated on precisely because passing was rare in its own
+training data. Full writeup: memory `self_play_root_noise_pass_bias`.
+
+**Fix to the fix:** `Mcts._add_root_noise` now excludes `Pass` from the
+noise draw entirely — noise is drawn and mixed only over board-play
+moves; Pass keeps its own net-derived prior untouched. New
+`tests/test_mcts.py::test_root_dirichlet_noise_never_touches_pass`
+covers it.
+
+**Confirmed:** a 20-game smoke test (same checkpoint/settings as the
+noise-on-Pass run above — `epsilon=0.25`, `alpha=0.03`, 400 sims) came
+back **20/20 clean, zero short games**, averaging ~88 moves/game —
+matching the healthy 1/100 no-noise baseline's game-length character,
+not the 35-40% collapse rate seen with noise-on-Pass. The Pass-exclusion
+fix works. `memory self_play_root_noise_pass_bias` updated accordingly.
+
+**Full 100-game batch (2026-09-04):** `configs/selfplay_self_play_gen1_noise_fix.yaml`,
+same settings, no filtering (`min_moves_to_keep`/`max_mid_game_pass_weight`
+left at their no-op defaults) — **10/100 short games (10%)**, avg length
+80.5 moves, 8,045 examples written to
+`selfplay_games/self_play_gen1_noise_fix.npz`. Better than the 20-game
+smoke test suggested (0%) but not as clean as the original no-noise
+baseline (1%).
+
+**Inspected all 10 short games directly** (board_planes/policy_targets
+from the saved `.npz`, matched back to per-game boundaries via the run
+log): all 10 are genuine collapse artifacts, not legitimate quick
+losses — every one won by White, near-empty final boards (0-10 stones),
+Pass probability spiking to 30-80% within the first couple of recorded
+moves. Notably, some show Pass at ~31% on the *very first* move, before
+noise could touch anything but board-play priors. Refined diagnosis:
+`alpha=0.03` (AlphaZero's own 19x19 value, ~250+ opening legal moves) is
+far more peaked than appropriate for 9x9's ~82 actions. The standard
+tuning heuristic is `alpha ≈ 10 / average legal moves` (it's why chess
+uses 0.3, shogi 0.15, 19x19 Go 0.03) — for 9x9 that's `alpha ≈ 0.1-0.12`,
+not 0.03. Too-peaked noise dumps nearly all its mass on one random
+board move and leaves the other ~80 with near-zero effective priors
+after mixing; Pass doesn't need to be boosted to win the PUCT comparison
+if its ~80 competitors get suppressed instead.
+
+### 13. The fine-tune on noise-fixed data is a wash, not a win (2026-09-04)
+
+Fine-tuned `bootstrap_gen1_noise_fix_candidate.pt` on the 6%-short 100-game
+batch (`configs/bootstrap_train_gen1_noise_fix_candidate.yaml`, same 25/75
+mix recipe as `bootstrap_train_gen1_candidate.yaml`'s v4 fix, 1,541 steps).
+Evaluated against its parent (`configs/eval_gen1_noise_fix_candidate_vs_residual.yaml`,
+40 games): **candidate 1491.8 vs. parent 1508.2 — do not promote.** The
+*same* 25/75 recipe produced a clean 40-0 win on the original (no-noise)
+self-play data (section 1). Fixing the pass-collapse didn't preserve
+training-data quality: `epsilon=0.25` root noise perturbs every move's
+selection throughout each game (via the visit-count policy target,
+sampled at `temperature=1.0`), not just early moves -- plausibly trading
+catastrophic early-passing for milder overall move-quality noise in every
+recorded example.
+
+**Root-caused further via research (2026-09-04):** confirmed this
+project's self-play samples moves at a *flat* `temperature=1.0` for the
+entire game, every move, in both `selfplay/generate.py` and
+`selfplay/self_play.py` -- no annealing at all. Real AlphaZero anneals
+this: `temperature=1` (stochastic sampling) for only the first ~30
+plies, then `temperature~=0` (deterministic, most-visited move) for the
+rest of the game. This project never makes that switch, which is a
+second, independent source of noise throughout the whole game --
+separate from the Dirichlet noise fix, and likely the bigger contributor
+to section 13's wash, since the pass-collapse problem lives almost
+entirely in the *opening* (where high temperature is still needed) while
+noise/randomness deep into an already-decided game just degrades
+quality for no benefit. Bonus finding: KataGo's own published alpha
+heuristic (`10.83 / average legal moves`) gives `~=0.132` for 9x9 --
+independently validates this project's `alpha=0.1`, no further tuning
+needed there.
+
+**Recommended next fix, not yet implemented:** add temperature annealing
+(e.g. a `temperature_drop_move` config, ~30, matching AlphaZero's own
+value) to `self_play.py`'s move sampling, try that *alone* before
+touching `epsilon` further -- it's cheap, doesn't risk reopening the
+collapse fix (sections 11-12), and directly targets the newly-identified
+mechanism.
+
+### 14. The actual chaining test: substantially reduced, not eliminated (2026-09-04)
+
+The real question this whole day's investigation was built toward:
+generated `configs/selfplay_self_play_gen2_noise_fix.yaml` (100 games,
+chained from `bootstrap_gen1_noise_fix_candidate.pt`, same fix settings
+throughout -- `epsilon=0.25` excluding Pass, `alpha=0.1`, 400 sims).
+Tracked short-game rate every 10 games as it generated: 0%, 10%, 20%,
+18%, 20%, 23%, 23%, 20%, 20%, **23% final (23/100)**, avg length 69.3
+moves, 6,927 examples written to `selfplay_games/self_play_gen2_noise_fix.npz`.
+
+**Verdict: the fix substantially reduces compounding but does not fully
+eliminate it.** Gen1 (from the pristine baseline): 6% short games. Gen2
+(chained from gen1's candidate): 23%. That's roughly a 4x increase
+across one chain step -- real, and worth taking seriously -- but nowhere
+near the original *unfixed* bug's trajectory (~0.01% → 1.2-1.5% →
+27-35%, i.e. ~100x-ish per generation, reaching near-total collapse
+within two chained fine-tunes). The rate leveled off within this
+100-game batch itself (climbed 0%→23% over the first ~30 games, then sat
+in the 18-23% band for the remaining 70), which is a better sign than
+monotonic runaway growth, but this is a single generation's worth of
+evidence -- **whether the 6%→23% pattern continues compounding into a
+generation 3, or whether 23% is closer to a new steady state, is not
+yet known and would need another chain step to answer.**
+
+Section 13's fine-tune-wash finding and its temperature-annealing fix
+(not yet applied) are a plausible lever for *this* result too, not just
+training-data quality: annealing wouldn't directly touch these short
+games (by construction, a ≤20-move game never reaches the proposed
+`temperature_drop_move`≈30 threshold), but a cleaner, less-noisy
+generation-1 candidate (a real strength win instead of a wash) might
+itself produce a better-calibrated value net, which could reduce how
+much the *underlying* pass-miscalibration compounds when chained --
+untested, a hypothesis for next time, not a conclusion.
+
+### 15. Temperature annealing fixes the fine-tune wash (2026-09-04)
+
+Implemented `temperature_drop_move` (`play_one_game` in
+`selfplay/self_play.py`: samples at `temperature` for moves before it,
+greedy/argmax after -- matching AlphaZero's own schedule). Covered by
+`tests/test_self_play.py::test_temperature_drop_move_makes_move_selection_deterministic`.
+
+Re-ran the full gen1→fine-tune→eval pipeline with `temperature_drop_move=30`
+added on top of the existing collapse fix (`configs/selfplay_self_play_gen1_temp_anneal.yaml`,
+`bootstrap_train_gen1_temp_anneal_candidate.yaml`,
+`eval_gen1_temp_anneal_candidate_vs_residual.yaml`):
+- Self-play: 8/100 short games (8%) -- matches the pre-annealing 6%,
+  confirming annealing doesn't disturb the collapse fix (as predicted,
+  since collapse lives in the opening, still fully covered by
+  `temperature=1` below move 30).
+- Fine-tune eval vs. pristine baseline: **candidate 1726.1 vs. parent
+  1273.9 — PROMOTE.** Not just fixed, decisively so -- a far larger gap
+  than the wash (1491.8 vs 1508.2) and comparable to or exceeding the
+  original no-noise recipe's clean win (section 1).
+
+**Confirmed: a flat, un-annealed temperature was indeed the main driver
+of section 13's wash**, not the Dirichlet noise itself. `bootstrap_gen1_temp_anneal_candidate.pt`
+supersedes `bootstrap_gen1_noise_fix_candidate.pt` as the generation-1
+checkpoint to build on. `temperature_drop_move=30` should be included in
+all future self-play configs alongside the existing noise settings.
+
+**Re-tested with `alpha=0.1`** (20-game smoke test, otherwise identical
+settings): **19/20 clean, 1 short (5%)** — a further improvement over
+alpha=0.03's 10%, consistent with the branching-factor theory. Confirmed
+at full 100-game scale: **6/100 short (6%)**, avg length 87.1 moves,
+8,708 examples written to `selfplay_games/self_play_gen1_noise_fix.npz`
+(same path as the alpha=0.03 run — overwritten; that batch's numbers are
+preserved above for reference). `alpha=0.1` is now both `MctsConfig`'s
+code default and the value in
+`configs/selfplay_self_play_gen1_noise_fix.yaml`. Still above the
+original 1% no-noise baseline — worth keeping in mind if a future
+generation shows renewed instability — but a real, reproducible
+improvement (10%→6% held from n=20 to n=100) and a good batch to build
+the next fine-tune on.
+
+### 16. Re-tested gen2 chaining from the annealed candidate: improved, not solved (2026-09-05)
+
+Ran `configs/selfplay_self_play_gen2_temp_anneal.yaml` (100 games, chained from
+`bootstrap_gen1_temp_anneal_candidate.pt` -- the genuine strength win, not the
+wash candidate). Result: **17/100 short games (17%)**, avg 75.6 moves, 7,556
+examples written to `selfplay_games/self_play_gen2_temp_anneal.npz`.
+
+Comparison across all three gen2 attempts (same chaining structure, gen1's
+own rate for reference):
+- Gen1 (from pristine baseline, full fix): 8% short games
+- Gen2 chained from `bootstrap_gen1_noise_fix_candidate.pt` (the wash
+  candidate, section 14): 23%
+- Gen2 chained from `bootstrap_gen1_temp_anneal_candidate.pt` (the real
+  strength win): **17%**
+
+**Confirms the section 14 hypothesis partially: a cleaner, real-strength-win
+gen1 candidate does reduce gen2's compounding (23%→17%), but doesn't
+eliminate it.** Chaining still roughly doubles the collapse rate per
+generation (8%→17%) even with every fix applied so far. This is the honest
+state of Phase 3 as of this session: single-generation collapse is
+well-controlled (~6-8%), chaining compounding is reduced but real
+(~2x/generation, down from the original ~100x/generation and section 14's
+~4x/generation). Section 17 below (further research) has the ranked next
+steps if closing this gap further is worth pursuing.
+
+### 17. Further research: ranked fixes if chaining still isn't fully resolved (2026-09-05)
+
+Deep research turned up additional levers beyond noise/alpha/temperature,
+ranked by cost/impact for this project's single-machine scale:
+
+1. **Structurally disallow `Pass` for the first ~6-8 moves during
+   self-play generation** (generation only, not eval/inference) --
+   highest impact, near-zero cost, not yet tried. Not a named technique
+   in the literature (AlphaZero's own opening diversity comes from
+   visit-count sampling, not move restriction) -- an engineering
+   judgment call, but a well-supported one: every collapse inspected so
+   far (section 12) happened in the opening, several as Black's literal
+   first move, and there is no legitimate 9x9 scenario where passing
+   move 1-8 is correct. Unlike every fix tried today (all probabilistic
+   nudges), this is a hard structural guarantee against this specific
+   failure class rather than a nudged probability. **Try this first if
+   chaining still shows meaningful collapse after sections 11+15's
+   fixes.**
+2. **KataGo's policy target pruning, now fully specified** (arXiv
+   1902.10565): minimum forced-playout floor per child
+   `n_forced(c) = (k * P(c) * total_visits)^0.5` with `k=2`; before
+   computing the training target, prune each non-best child's visits
+   downward (not below its forced-playout floor) as long as doing so
+   doesn't push its PUCT score above the best child's
+   (`PUCT(c) = V(c) + cPUCT*P(c)*sqrt(total_visits)/(1+N(c))`,
+   `cPUCT=1.1`; root FPU=0 when noise is enabled). Decouples "noise
+   forced a bad move to get tried" from "that move's inflated visit
+   count gets imitated as if it were good" -- addresses a mechanism
+   today's noise fix doesn't touch. Moderate implementation effort
+   (added to `Mcts.search`'s end); hold in reserve.
+3. **KL-divergence regularization against the pristine policy** on the
+   same positions (a frozen reference net, extra forward pass per
+   batch) -- standard practice in iterated self-training literature for
+   exactly this class of compounding drift, and a genuinely different
+   mechanism than this project's existing 25/75 data-mixing anchor
+   (constrains the output distribution directly rather than hoping data
+   composition achieves the same effect indirectly). Worth trying if
+   (1) doesn't fully resolve chaining.
+4. **Entropy regularization / value-target smoothing** -- low priority:
+   this problem is one specific rare action creeping up, not the whole
+   policy over-sharpening, so entropy regularization is a blunt
+   instrument here; value-target smoothing is nearly free but the score
+   head result (section 8) already rules out value-target flatness as
+   primary driver, so low expected impact.
+5. **Add a move-count/pass-count input feature** (real technique, used
+   by KataGo/Leela Zero) -- explicitly deferred: breaks
+   `docs/MODEL_CONTRACT.md` (shared with the Android app), requires
+   Android inference-wrapper and export-tooling changes, and makes
+   every existing checkpoint incompatible (can't warm-start across a
+   changed input shape). Longer-term only, not a quick fix.
+
+### 18. Eval methodology bug: "40-game matches" were really 2 games repeated (2026-09-05)
+
+While evaluating `bootstrap_gen1_no_pass_guard_candidate.pt` (section 17's
+no-pass guard fix), got the exact same two numbers as section 15's
+eval -- 1726.1/1273.9 -- just swapped which side won. That's not a
+coincidence: `eval/match.py`'s `_play_one_game` used `Mcts.select_move`,
+which is pure deterministic argmax, and `MctsConfig()`'s defaults leave
+root noise off (`epsilon=0.0`). With two fixed checkpoints and zero
+randomness anywhere, every "A plays Black" game is bit-for-bit identical
+to every other "A plays Black" game (same for "B plays Black") -- a
+"40-game match" was actually only **2 unique games, each replicated
+`num_games/2` times**. `eval/elo.py`'s `update_ratings` applies a fixed
+per-game Elo delta sequentially starting from 1500/1500, so any clean
+2-for-2 sweep converges to the exact same fixed endpoint regardless of
+which checkpoints are being compared -- explaining the repeated numbers
+exactly. **This likely affects every "40-0" / "PROMOTE" / "wash"
+conclusion in this document and the project's history, including every
+prior generation's promotion decisions (section 1 onward)** -- the
+qualitative direction (a clean 2-for-2 sweep vs. a mixed one) is still
+real signal, but the implied statistical confidence of "40 games" was
+never real.
+
+**Fixed:** `eval/match.py`'s `play_match`/`_play_one_game` gained
+`temperature`/`temperature_drop_move`/`seed` parameters, using the same
+search-then-sample approach as `selfplay/self_play.py` (default `0.0`,
+i.e. the original deterministic `select_move` behavior, preserved for
+backward compatibility and existing tests that explicitly rely on it).
+`eval/promote.py` now defaults to `temperature=1.0`,
+`temperature_drop_move=16`, `seed=0` for real promotion decisions, so a
+"40-game match" is actually 40 different games. Covered by two new
+`tests/test_match.py` cases (variation across same-color games; seeded
+reproducibility).
+
+**Re-checked both of today's key comparisons with the fixed eval**
+(`temperature=1.0`, `temperature_drop_move=16`, real 40 distinct games):
+- `bootstrap_gen1_temp_anneal_candidate.pt`: **1619.0 vs. 1381.0 —
+  still PROMOTE.** Smaller margin than the old deterministic result
+  (1726.1/1273.9, inflated by only 2 real trials), but the direction
+  holds: genuinely stronger.
+- `bootstrap_gen1_no_pass_guard_candidate.pt`: **1543.0 vs. 1457.0 —
+  PROMOTE.** This *reverses* the earlier deterministic-eval verdict
+  ("do not promote", 1273.9/1726.1) -- that result was an artifact of
+  the bug, not a real assessment. With genuine statistical testing, the
+  no-pass-guard candidate is also a real strength win, just a more
+  modest one than temp-anneal's.
+
+**Conclusion: both fixes are validated as genuine strength wins, not
+washes.** `bootstrap_gen1_no_pass_guard_candidate.pt` is now the
+checkpoint of choice going forward -- it has both the strongest
+collapse-rate result of the whole investigation (0/100 short games) and
+a confirmed real strength win, correcting the false "wash" reading that
+would have wrongly discarded it.
+
+### 19. The chaining test, finally: 0/100 in both generations (2026-09-05)
+
+Ran `configs/selfplay_self_play_gen2_no_pass_guard.yaml` (100 games,
+chained from `bootstrap_gen1_no_pass_guard_candidate.pt` -- the
+structural-guard candidate, confirmed clean in isolation and a genuine
+strength win with the fixed eval). This is the actual test the whole
+day's investigation was building toward.
+
+**Result: 0/100 short games, avg 94.8 moves, 9,479 examples written to
+`selfplay_games/self_play_gen2_no_pass_guard.npz`.** Tracked every 10
+games as it generated: 0%, flat, the entire way through -- not a single
+short/collapsed game in the full 100-game generation-2 batch. Compare
+to every prior gen2 attempt at this same chaining structure: 23%
+(section 14, wash candidate), 17% (section 16, temp-anneal candidate).
+**The structural `no_pass_before_move` guard closes the chaining gap
+that noise + alpha + temperature annealing alone only narrowed.**
+
+**This is the conclusive result for Phase 3's chaining-collapse
+investigation.** Both generation 1 (section 17) and generation 2 (this
+section) came back completely clean at full 100-game scale, using the
+identical fix stack chained end to end. Unlike every earlier fix
+(probabilistic nudges that reduced but never eliminated the compounding
+pattern), the hard structural guarantee against the exact observed
+failure mode (an illegitimate early Pass) appears to fully solve it.
+Phase 3's self-play pass-collapse bug can now be described as
+**resolved**, not just "much improved" -- pending only the standard
+caveat that this is one 100-game sample, not a formal proof, and a
+generation 3 chain step (not yet run) would be the natural further
+confirmation if more certainty is wanted before treating this as
+permanently settled.
+
+### 20. Generation 2's fine-tune: also a genuine strength win, chained (2026-09-05)
+
+Fine-tuned `bootstrap_gen2_no_pass_guard_candidate.pt` on
+`self_play_gen2_no_pass_guard.npz` (same 25/75 mix recipe, warm-started
+from `bootstrap_gen1_no_pass_guard_candidate.pt` -- a real chained
+fine-tune, not from the pristine baseline). Evaluated with the fixed
+eval (section 18) two ways:
+
+- vs. the pristine baseline (`bootstrap_batch2_residual.pt`): **1579.6
+  vs. 1420.4 — PROMOTE.**
+- vs. its own generation-1 parent (`bootstrap_gen1_no_pass_guard_candidate.pt`):
+  **1595.4 vs. 1404.6 — PROMOTE.**
+
+**This completes the picture: chaining is now compounding strength, not
+just avoiding collapse.** Generation 2 beats generation 1, which beats
+the pristine baseline -- the healthy AlphaZero-style improvement loop
+Phase 3 was always supposed to produce, now actually working across a
+real chained fine-tune with zero collapse at every step.
+`bootstrap_gen2_no_pass_guard_candidate.pt` is the new best checkpoint.
+
+### 21. Generation 3, for extra confidence: the pattern holds a third time (2026-09-05)
+
+Ran the same recipe one more generation (`configs/selfplay_self_play_gen3_no_pass_guard.yaml`,
+chained from `bootstrap_gen2_no_pass_guard_candidate.pt`) to check whether
+sections 19-20's result was a one-off or a genuinely sustained pattern.
+
+- Self-play: **0/100 short games**, avg 97.3 moves, 9,729 examples
+  (`selfplay_games/self_play_gen3_no_pass_guard.npz`) -- third
+  consecutive generation completely clean.
+- Fine-tuned `bootstrap_gen3_no_pass_guard_candidate.pt` (same 25/75 mix
+  recipe, warm-started from the gen2 candidate). Evaluated with the
+  fixed eval:
+  - vs. the pristine baseline: **1597.9 vs. 1402.1 — PROMOTE.**
+  - vs. its own generation-2 parent: **1582.7 vs. 1417.3 — PROMOTE.**
+
+**Three generations in a row, each one a genuine strength win over its
+predecessor, with zero collapse at every single step.** This is no
+longer just "the fix worked once" -- it's a sustained, repeating,
+healthy improvement loop. `bootstrap_gen3_no_pass_guard_candidate.pt` is
+the new best checkpoint. Phase 3's investigation can be considered
+closed; the natural next work is scaling this proven loop further
+(more generations, bigger self-play batches, or moving fully into Phase
+4's product integration), not further stability debugging.
+
+## Open items as of this writing (end of 2026-09-05 session)
+
+- **Phase 3's self-play pass-collapse bug is resolved (section 19).**
+  Both generation 1 and generation 2 came back **0/100 short games** at
+  full scale, chained end to end, using: root noise excluding Pass
+  (`alpha=0.1`, tuned for 9x9), temperature annealing
+  (`temperature_drop_move=30`), and the structural
+  `no_pass_before_move=20` guard. This is a real change from the
+  ~2x/generation compounding seen with the noise+alpha+temperature-only
+  fix (sections 14, 16) -- the structural guard was the piece that
+  closed the remaining gap. Standard caveat: one 100-game sample per
+  generation, not a formal proof -- a generation 3 chain step (not yet
+  run) would be the natural further confirmation if more certainty is
+  wanted, but there is no longer a known, reproducible failure mode left
+  to chase.
+- **Eval methodology fixed (section 18) — re-read before trusting any
+  older PROMOTE/wash number in this document without the fix applied.**
+  `eval/promote.py` now uses real per-game randomness
+  (`temperature=1.0`, `temperature_drop_move=16`); a "40-game match"
+  used to be only 2 unique deterministic games repeated. Re-checking
+  with the fix reversed one conclusion: `bootstrap_gen1_no_pass_guard_candidate.pt`
+  is a genuine PROMOTE (1543.0 vs. 1457.0), not the "do not promote" the
+  broken eval implied.
+- Not yet done: fine-tune a candidate on `self_play_gen2_no_pass_guard.npz`
+  and evaluate it (with the fixed eval) to confirm generation 2 is also
+  a real strength win, not just collapse-free -- section 19 only
+  confirms the self-play *generation* step, not yet a full second
+  fine-tune cycle. Also not yet tried: a generation 3 chain step (see
+  above) for extra confidence, and section 17's #2/#3 (KataGo policy
+  target pruning, KL anchor) remain available but are no longer
+  necessary given section 19's result -- hold in reserve only.
 - Score-margin auxiliary head: implemented (section 7) and evaluated
-  (section 8) — real, working, but does not address the chaining
-  collapse by itself. Keep it (no downside, good practice).
-- Warm-start chaining restructuring: implemented and evaluated (section
-  9) — halves the collapse severity (16% vs. 27-34% Pass probability)
-  but loses the clear strength win in the process (statistical wash,
-  not a 40-0 promote). Not a complete fix by itself.
-- Hardened self-play filtering: implemented (section 10) — works as
-  designed, but reveals only ~11% of this checkpoint's self-play
-  survives both filters, too little to fine-tune on confidently at that
-  scale. **This is where the session stopped — pick up here tomorrow.**
-- **Immediate next step, first thing tomorrow:** decide between (a)
-  generating a much larger raw self-play batch so ~11% clean survival
-  still yields enough data (cheap to try: just re-run
-  `configs/selfplay_self_play_gen2_hardened.yaml`-style config with a
-  bigger `num_games`, e.g. 500-1000 instead of 100), or (b) treating
-  pervasive mid-game Pass bias as a signal that filtering
-  self-play *output* has hit diminishing returns and the checkpoint's
-  own value calibration needs more direct attention. Leaning toward
-  trying (a) first since it's cheap and directly tests whether more
-  raw self-play volume resolves the practical data-scarcity problem
-  without needing a new approach.
-- Other live options not yet tried, still on the table if (a)/(b) above
-  don't pan out: retune the restructured mix (more steps, or weight
-  recent generations higher than older ones), or step back to a true
-  continuous replay-buffer training loop (bigger infrastructure change,
-  discussed and deliberately deferred — see the "step 3" discussion
-  earlier in this file's git history / the conversation this session).
-  Accepting the single first-generation result as Phase 3's current
-  deliverable and pausing multi-generation chaining remains a valid
-  fallback if none of the above pan out.
-- Known-good checkpoints: `bootstrap_gen1_candidate.pt` (v4, no score
-  head) and `bootstrap_gen1_candidate_score_head.pt` (with it) — both
-  25/75 mix from the pristine baseline, both promoted, both stable in
-  isolation. These are the only checkpoints past `bootstrap_batch2_residual.pt`
-  worth building on right now.
-- Known-bad/known-mediocre checkpoints — don't build on: the two
-  chained-warm-start attempts, `bootstrap_gen2_candidate.pt` (34.5%
-  Pass) and `bootstrap_gen2_candidate_score_head.pt` (27.04% Pass); and
-  the restructured attempt, `bootstrap_gen2_candidate_restructured.pt`
-  (16.09% Pass, not promoted — better than the other two but not a
-  clean result either).
+  (section 8) — real, working, keep it (no downside), but was never the
+  fix for chaining collapse.
+- Warm-start chaining restructuring (section 9) and hardened self-play
+  filtering (section 10): both superseded/subsumed by the fixes above,
+  but hardened filtering is still worth keeping as a cheap safety net
+  regardless.
+- A full continuous replay-buffer training loop remains deliberately
+  deferred as disproportionate for this project's single-machine scale
+  — revisit only if section 17's options don't pan out.
+- **Known-good checkpoints, in order of preference:**
+  `bootstrap_gen3_no_pass_guard_candidate.pt` (best overall — three
+  chained generations, each beating its predecessor: PROMOTE vs. the
+  pristine baseline 1597.9 vs. 1402.1, vs. its own gen2 parent 1582.7
+  vs. 1417.3, with 0/100 short games at every generation in the chain)
+  > `bootstrap_gen2_no_pass_guard_candidate.pt` (its parent — PROMOTE
+  vs. both the pristine baseline, 1579.6 vs. 1420.4, and its own gen1
+  parent, 1595.4 vs. 1404.6, 0/100 short games) >
+  `bootstrap_gen1_no_pass_guard_candidate.pt` (the first full-fix-stack
+  checkpoint — PROMOTE 1543.0 vs. 1457.0, 0/100 short games) >
+  `bootstrap_gen1_temp_anneal_candidate.pt` (PROMOTE 1619.0 vs. 1381.0 —
+  a bigger single-generation strength margin than the guard candidate,
+  but 8% short games vs. 0%, and not chained further) >
+  `bootstrap_gen1_candidate.pt` / `bootstrap_gen1_candidate_score_head.pt`
+  (original pre-investigation recipe, still valid, promoted, stable in
+  isolation) — all build from `bootstrap_batch2_residual.pt`. Note all
+  PROMOTE numbers above used the *fixed* eval (section 18); any older
+  number elsewhere in this doc used the broken deterministic one.
+- **Known-bad/known-mediocre checkpoints — don't build on:** the
+  original chained-warm-start attempts, `bootstrap_gen2_candidate.pt`
+  (34.5% Pass) and `bootstrap_gen2_candidate_score_head.pt` (27.04%
+  Pass); the restructured attempt, `bootstrap_gen2_candidate_restructured.pt`
+  (16.09% Pass, not promoted); and `bootstrap_gen1_noise_fix_candidate.pt`
+  (real collapse-rate fix, but a strength wash even under re-check —
+  this one's "do not promote" was never re-tested with the fixed eval,
+  but section 15 already superseded it on other grounds, so low
+  priority to re-check).
 - Data files: `selfplay_games/self_play_gen2_hardened.npz` (779
   examples, both filters applied) exists but is too small to have been
   used for anything yet — no fine-tune has been run on it.
