@@ -407,6 +407,14 @@ scheduling, session length) is still to be decided — revisit when Phase
       first attempt, confirming the recipe isn't a one-off fix. New best
       checkpoint, seven chained generations overall. See
       `docs/SELF_PLAY_STABILITY.md` section 25.
+- [ ] **Generation 8, attempt 1 (2026-09-06):** did not promote against
+      gen7 (1519.1 vs. 1480.9, 38.2-Elo gap) but still beat the pristine
+      baseline decisively (1644.9 vs. 1355.1) — read as ordinary
+      self-play variance, not a new plateau (a single non-promotion
+      after two clean promotes, unlike gen5's three-in-a-row before it
+      was treated as a real signal). Retrying with a fresh seed before
+      considering this a pattern. See `docs/SELF_PLAY_STABILITY.md`
+      section 26.
 - [x] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`). Three fine-tuned generations are
       exported and on-device in igo-app so far (gen2/gen3/gen4); gen5 and

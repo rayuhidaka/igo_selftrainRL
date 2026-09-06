@@ -917,6 +917,25 @@ up for a second consecutive generation, not just the one that resolved the gen5 
 `bootstrap_gen7_no_pass_guard_candidate.pt` is the new best checkpoint, seven chained
 generations overall.
 
+### 26. Generation 8, attempt 1: an ordinary non-promotion, not a new plateau (2026-09-06)
+
+Chained from `bootstrap_gen7_no_pass_guard_candidate.pt` under the same 300-game/
+replay-buffer recipe that cleanly promoted gen6 and gen7. Self-play: **0/300 short games**,
+31,000 examples, 182 minutes wall time.
+
+- vs. its own generation-7 parent: **1519.1 vs. 1480.9 -- Do not promote** (38.2-Elo gap,
+  under the 50-Elo threshold, at the larger 80-game sample size).
+- vs. the pristine baseline: **1644.9 vs. 1355.1 -- PROMOTE**, consistent with every prior
+  generation's baseline win.
+
+Read against the section 24 investigation: this is a single non-promotion after two clean
+promotes under the fixed recipe (gen6, gen7), not a repeated pattern -- unlike gen5's
+plateau, which took three consecutive 100-game non-promotions before it was treated as a
+real signal rather than noise. Still beating the baseline decisively rules out a collapse.
+Treating this as ordinary self-play generation-to-generation variance (the recipe fix
+reduced the *frequency* of non-promotions, not their possibility entirely) and retrying with
+a fresh self-play seed before considering this a new plateau requiring investigation.
+
 ## Open items as of this writing (end of 2026-09-05 session)
 
 - **Phase 3's self-play pass-collapse bug is resolved (section 19).**
