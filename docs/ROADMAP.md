@@ -363,9 +363,27 @@ scheduling, session length) is still to be decided — revisit when Phase
       zero collapse at every step. See `docs/SELF_PLAY_STABILITY.md`
       section 22. Exported and verified on-device (Phase 4 below), added
       to igo-app as a third difficulty tier.
+- [x] **Generation 5, and parallelizing self-play (2026-09-06):** targeting
+      generation 10 per the user's request, but generation 4's self-play
+      alone took ~180 minutes serial despite 16 CPU cores being available
+      (`self_play.py` is deliberately single-threaded per process). New
+      `selfplay/run_parallel.py` splits self-play across 4 worker
+      subprocesses, then merges their output — same recipe, ~3.3x faster
+      wall time. Chained from `bootstrap_gen4_no_pass_guard_candidate.pt`
+      — **0/100 short games**, 9,810 examples, 55 minutes wall time (vs.
+      gen4's 180).  `bootstrap_gen5_no_pass_guard_candidate.pt` beats
+      both the pristine baseline (1601.8 vs. 1398.2) and its own gen4
+      parent (1557.4 vs. 1442.6), both PROMOTE. **This is now the best
+      checkpoint overall** — five chained generations, each a genuine
+      strength win, zero collapse at every step. See
+      `docs/SELF_PLAY_STABILITY.md` section 23. Not yet exported to
+      igo-app — holding off on exporting every single generation to
+      avoid churning the app's difficulty tiers mid-chain; revisiting
+      once the chain reaches a natural stopping point near generation 10.
 - [x] Save checkpoints at intervals — these become candidate difficulty
-      tiers, gated on Elo (`eval/`). Three fine-tuned generations now
-      exist (gen2/gen3/gen4), all exported and on-device in igo-app.
+      tiers, gated on Elo (`eval/`). Three fine-tuned generations are
+      exported and on-device in igo-app so far (gen2/gen3/gen4); gen5 and
+      beyond exist as checkpoints but aren't exported yet (see above).
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate
       (`should_promote`) — fully implemented and tested
       (`tests/test_elo.py`). See `docs/ARCHITECTURE.md`'s "Difficulty-tier

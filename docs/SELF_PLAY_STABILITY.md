@@ -745,6 +745,49 @@ were stopped (`./gradlew.bat --stop`). Nothing about the self-play run itself wa
 worth remembering if a future long-running background job here gets killed unexpectedly:
 check for unrelated memory pressure on the host before assuming a bug in this pipeline.
 
+### 23. Generation 5, and parallelizing self-play to make a gen1-gen10 chain practical (2026-09-06)
+
+Motivated by wanting to push the proven chain to (at least) generation 10 for a real
+difficulty-tier spread, not just confidence-building -- but generation 4's self-play alone
+took ~180 minutes serial, despite this machine having 16 CPU cores. `selfplay/self_play.py`
+is deliberately single-threaded per process (single-position MCTS inference doesn't benefit
+from multi-threading), so the other 15 cores sat idle the whole time. New
+`selfplay/run_parallel.py` splits `num_games` across N real `self_play.py` subprocesses
+(unmodified, just a temporary config overriding `num_games`/`seed`/`out_path` each), then
+concatenates their outputs -- same recipe and total game count as a serial run, just
+wall-clock parallel. Smoke-tested against the existing 3-game config before trusting it for
+a real generation.
+
+- Self-play (chained from `bootstrap_gen4_no_pass_guard_candidate.pt`, 4 workers): **0/100
+  short games**, 9,810 examples from 100 games, **55 minutes wall time** -- a ~3.3x speedup
+  over gen4's serial 180 minutes (not the naive 4x, since the workers weren't perfectly
+  balanced: 25/25/25/25 games split evenly, but per-game move-count variance means some
+  workers finish their batch later than others). Real memory usage stayed well within the
+  WSL VM's 7.7GB limit (~2.5GB used with 4 workers, per `free -h`) -- much of each worker's
+  ~1GB RSS is shared library pages (torch/Python runtime) the OS maps once and shares
+  read-only across the separate processes, not 4x duplicated.
+- Fine-tuned `bootstrap_gen5_no_pass_guard_candidate.pt` (same 25/75 mix recipe, warm-started
+  from the gen4 candidate). Evaluated with the fixed eval:
+  - vs. the pristine baseline: **1601.8 vs. 1398.2 -- PROMOTE.**
+  - vs. its own generation-4 parent: **1557.4 vs. 1442.6 -- PROMOTE.**
+
+**Five generations in a row now, each a genuine strength win over its predecessor, zero
+collapse at every step.** `bootstrap_gen5_no_pass_guard_candidate.pt` is the new best
+checkpoint. Not yet exported to `.tflite` or added to igo-app -- only gen2/gen3/gen4 are
+wired into the app's difficulty picker so far; holding off on exporting every single
+generation to avoid churning the app's tiers mid-chain, revisiting once the chain reaches a
+natural stopping point near generation 10.
+
+One important caveat on absolute strength, raised directly by the user after playing against
+gen4: each generation's *relative* improvement is real and Elo-measured, but the *absolute*
+playing strength after even 10 generations will likely still feel weak -- this is a small
+net (4 residual blocks/64 channels) trained on only ~10k self-play examples per generation,
+nowhere near AlphaZero-scale data volume. Reaching generation 10 proves the loop keeps
+compounding and gives igo-app more difficulty tiers; it is not expected to produce a strong
+player on its own. A genuinely strong opponent would need a bigger lever than generation
+count alone (more games/generation, a bigger net, or substantially more compute) -- worth
+revisiting once the gen1-10 chain's trajectory is actually in hand.
+
 ## Open items as of this writing (end of 2026-09-05 session)
 
 - **Phase 3's self-play pass-collapse bug is resolved (section 19).**
@@ -787,13 +830,16 @@ check for unrelated memory pressure on the host before assuming a bug in this pi
   deferred as disproportionate for this project's single-machine scale
   — revisit only if section 17's options don't pan out.
 - **Known-good checkpoints, in order of preference:**
-  `bootstrap_gen4_no_pass_guard_candidate.pt` (best overall — four
+  `bootstrap_gen5_no_pass_guard_candidate.pt` (best overall — five
   chained generations, each beating its predecessor: PROMOTE vs. the
-  pristine baseline 1614.2 vs. 1385.8, vs. its own gen3 parent 1552.3
-  vs. 1447.7, with 0/100 short games at every generation in the chain;
-  see section 22) > `bootstrap_gen3_no_pass_guard_candidate.pt` (its
-  parent — PROMOTE vs. the pristine baseline 1597.9 vs. 1402.1, vs. its
-  own gen2 parent 1582.7 vs. 1417.3, 0/100 short games)
+  pristine baseline 1601.8 vs. 1398.2, vs. its own gen4 parent 1557.4
+  vs. 1442.6, with 0/100 short games at every generation in the chain;
+  see section 23) > `bootstrap_gen4_no_pass_guard_candidate.pt` (its
+  parent — PROMOTE vs. the pristine baseline 1614.2 vs. 1385.8, vs. its
+  own gen3 parent 1552.3 vs. 1447.7, 0/100 short games; see section 22)
+  > `bootstrap_gen3_no_pass_guard_candidate.pt` (its parent — PROMOTE
+  vs. the pristine baseline 1597.9 vs. 1402.1, vs. its own gen2 parent
+  1582.7 vs. 1417.3, 0/100 short games)
   > `bootstrap_gen2_no_pass_guard_candidate.pt` (its parent — PROMOTE
   vs. both the pristine baseline, 1579.6 vs. 1420.4, and its own gen1
   parent, 1595.4 vs. 1404.6, 0/100 short games) >
