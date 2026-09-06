@@ -830,8 +830,49 @@ coin-flip -- while both kept improving against the fixed pristine baseline. **Pa
 chain here rather than attempting a third retry or chaining generation 7 from a
 non-promoted candidate.** Deep-dive into the likely cause(s) (network capacity, self-play
 data volume, fine-tune training budget, the 25/75 anchor mix, and eval statistical power)
-requested from the user and delegated to a research pass -- see whatever follow-up entry
-picks up from here once that's back, before deciding how to adjust the recipe and resume.
+requested from the user and delegated to a research pass.
+
+**Research findings (2026-09-06):** running the actual Elo math confirmed the two attempts
+above are not equal evidence -- attempt 1's -173.8 Elo gap is a real, statistically
+distinguishable regression (implied win rate ~27%, 95% CI ~13-41%), while attempt 2's +21.6
+Elo gap is statistically indistinguishable from a coin flip at n=40 (implied win rate ~53%,
+95% CI ~38-69%) -- likely a true tie, not a loss. Root-cause assessment ranked the missing
+accumulated-self-play replay buffer as the most likely real, well-evidenced contributor:
+every generation's self-play data was generated once and discarded, the fixed 25% anchor
+(`batch2.npz`) is stale pre-self-play imitation data now 5 generations behind the
+checkpoint's own quality, and established 9x9 self-play replications (MiniZero: 2,000
+games/iteration from a 40,000-game rolling buffer; a population-based-training paper: 5,000
+games/iteration) generate 20-50x more new data per iteration than this project's 100 games.
+The 60-second fine-tune budget was *not* implicated as under-training -- the math shows each
+self-play example already gets seen ~7.8 times within that window, so extending training
+time alone would likely deepen overfitting to a narrow batch rather than fix anything.
+Network capacity was judged plausible but unproven either way (no cheap diagnostic run yet
+under the current chained-fine-tune regime, as opposed to the large-static-dataset regime
+where the residual tower was previously confirmed not yet capacity-limited).
+
+**Attempt 3, testing the two free/cheap recommendations together:** reused attempt 2's
+self-play data (seed 42, already on disk, no new self-play needed) but replaced the fine-tune's
+data mix with a real replay buffer (10% `batch2.npz`, 15% `self_play_gen4_no_pass_guard.npz`,
+25% `self_play_gen5_no_pass_guard.npz`, 50% `self_play_gen6_no_pass_guard.npz` -- down from
+25% batch2.npz/75% self-play-only), and widened the vs-gen5 eval from 40 to 80 games to
+actually resolve a close call statistically.
+
+- vs. its own generation-5 parent: **1515.4 vs. 1484.6 -- Do not promote** (30.8-Elo gap,
+  still under the 50-Elo threshold, though nominally higher than attempt 2's 21.6-Elo gap --
+  with n=80 vs. n=40 the standard error shrank, but the two results still overlap
+  substantially; this shift is not itself strong evidence the mix change helped).
+- vs. the pristine baseline: **1645.3 vs. 1354.7 -- PROMOTE**, consistent with every other
+  gen6 attempt (1601.8 gen5 / 1634.2 attempt 1 / 1659.1 attempt 2 / 1645.3 attempt 3, all
+  comfortably beating baseline in a tight band).
+
+**Conclusion: the free fixes (replay buffer + wider eval) did not resolve the plateau.**
+Three independent attempts (two self-play samples, two fine-tune mixes) now land in the same
+place -- solidly ahead of the baseline, not reliably ahead of gen5. This shifts the balance
+of evidence toward the more expensive, not-yet-tried lever: self-play data volume per
+generation (100 games, ~10k examples) may itself be the binding constraint, not the mix or
+the eval alone. Paused here, reporting the full picture and remaining options (more
+self-play games per generation, a capacity-ceiling diagnostic, or accepting gen5 as the
+current plateau) to the user rather than spending more compute unilaterally.
 
 ## Open items as of this writing (end of 2026-09-05 session)
 
