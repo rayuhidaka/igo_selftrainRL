@@ -399,6 +399,14 @@ scheduling, session length) is still to be decided — revisit when Phase
       fine-tune mix (small legacy anchor + recent generations' self-play,
       favoring the newest), and an 80-game eval against the immediate
       parent (40 remains fine for the baseline comparison).
+- [x] **Generation 7, first full cycle under the new recipe (2026-09-06):**
+      chained from `bootstrap_gen6_no_pass_guard_candidate.pt`, 300
+      self-play games, replay-buffer fine-tune mix. **0/300 short games**,
+      30,727 examples. PROMOTE vs. gen6 (1571.9 vs. 1428.1) and vs. the
+      pristine baseline (1605.8 vs. 1394.2) — a clean promote on the
+      first attempt, confirming the recipe isn't a one-off fix. New best
+      checkpoint, seven chained generations overall. See
+      `docs/SELF_PLAY_STABILITY.md` section 25.
 - [x] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`). Three fine-tuned generations are
       exported and on-device in igo-app so far (gen2/gen3/gen4); gen5 and
