@@ -350,13 +350,22 @@ scheduling, session length) is still to be decided — revisit when Phase
       games** (third consecutive clean generation).
       `bootstrap_gen3_no_pass_guard_candidate.pt` beats both the pristine
       baseline (1597.9 vs. 1402.1) and its own gen2 parent (1582.7 vs.
-      1417.3), both PROMOTE. **This is now the best checkpoint overall**
-      — three chained generations, each a genuine strength win, zero
-      collapse at every step. See `docs/SELF_PLAY_STABILITY.md` section
-      21. Not yet exported to `.tflite` or verified on-device — Phase 4
-      below only did that for gen2 so far.
-- [ ] Save checkpoints at intervals — these become candidate difficulty
-      tiers, gated on Elo (`eval/`), not shipped automatically
+      1417.3), both PROMOTE. Three chained generations, each a genuine
+      strength win, zero collapse at every step. See
+      `docs/SELF_PLAY_STABILITY.md` section 21.
+- [x] **Generation 4, widening igo-app's difficulty spread (2026-09-06):**
+      chained one more generation from `bootstrap_gen3_no_pass_guard_candidate.pt`
+      — **0/100 short games** (fourth consecutive clean generation), 9,748
+      examples. `bootstrap_gen4_no_pass_guard_candidate.pt` beats both the
+      pristine baseline (1614.2 vs. 1385.8) and its own gen3 parent
+      (1552.3 vs. 1447.7), both PROMOTE. **This is now the best checkpoint
+      overall** — four chained generations, each a genuine strength win,
+      zero collapse at every step. See `docs/SELF_PLAY_STABILITY.md`
+      section 22. Exported and verified on-device (Phase 4 below), added
+      to igo-app as a third difficulty tier.
+- [x] Save checkpoints at intervals — these become candidate difficulty
+      tiers, gated on Elo (`eval/`). Three fine-tuned generations now
+      exist (gen2/gen3/gen4), all exported and on-device in igo-app.
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate
       (`should_promote`) — fully implemented and tested
       (`tests/test_elo.py`). See `docs/ARCHITECTURE.md`'s "Difficulty-tier
@@ -420,7 +429,15 @@ scheduling, session length) is still to be decided — revisit when Phase
       replacement of one by the other). `RayZeroModelOnDeviceTest`
       extended to cover both checkpoints: 2 tests, 0 failures on
       `MinSdk_API24`.
-- [ ] Hand off checkpoints + Elo metadata to the app for the difficulty
-      picker and optional Elo-over-generations chart — gen2 and gen3 are
-      both in place as a first two-tier spread; the app-side picker UI
-      itself doesn't exist yet (see `igo-app/docs/ROADMAP.md` Phase 4).
+- [x] **Exported and verified `bootstrap_gen4_no_pass_guard_candidate.pt`
+      on-device (2026-09-06):** `export/ray_zero_gen4_no_pass_guard.tflite`,
+      numerically verified against the source checkpoint. Copied into
+      `igo-app/app/src/main/assets/models/` alongside gen2/gen3.
+      `RayZeroModelOnDeviceTest` extended to cover all three checkpoints.
+- [x] Hand off checkpoints to the app for the difficulty picker — gen2,
+      gen3, and gen4 are all exported, on-device, and wired into
+      igo-app's "Play vs Ray-zeroGo" difficulty picker (see
+      `igo-app/docs/ROADMAP.md` Phase 4).
+- [ ] Optional Elo-over-generations chart in-app — not started; Elo
+      numbers exist per-eval (see Phase 3 above) but aren't surfaced
+      anywhere in igo-app's UI.

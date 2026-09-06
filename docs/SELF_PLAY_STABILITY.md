@@ -716,6 +716,35 @@ closed; the natural next work is scaling this proven loop further
 (more generations, bigger self-play batches, or moving fully into Phase
 4's product integration), not further stability debugging.
 
+### 22. Generation 4: the pattern holds a fourth time, widening igo-app's difficulty spread (2026-09-06)
+
+Ran the same recipe one more generation (`configs/selfplay_self_play_gen4_no_pass_guard.yaml`,
+chained from `bootstrap_gen3_no_pass_guard_candidate.pt`) -- this time motivated by a concrete
+product need (igo-app's difficulty picker only had two tiers, gen2/gen3) rather than pure
+stability confidence-building.
+
+- Self-play: **0/100 short games, 0 discarded for elevated mid-game Pass weight** -- fourth
+  consecutive generation completely clean. 9,748 examples from 100 games, ~180 minutes wall
+  time (400 sims/move, same budget as gen1-gen3).
+- Fine-tuned `bootstrap_gen4_no_pass_guard_candidate.pt` (same 25/75 mix recipe, warm-started
+  from the gen3 candidate). Evaluated with the fixed eval:
+  - vs. the pristine baseline: **1614.2 vs. 1385.8 -- PROMOTE.**
+  - vs. its own generation-3 parent: **1552.3 vs. 1447.7 -- PROMOTE.**
+
+**Four generations in a row now, each a genuine strength win over its predecessor, zero
+collapse at every step.** `bootstrap_gen4_no_pass_guard_candidate.pt` is the new best
+checkpoint. Exported to `export/ray_zero_gen4_no_pass_guard.tflite` and added to igo-app as a
+third difficulty tier (see igo-app/docs/ROADMAP.md) -- the first generation exported
+specifically to widen the difficulty spread rather than as a "does the pipeline still work"
+check.
+
+One operational note, not a research finding: this run's background process was killed once
+by a system-wide low-memory event (idle Gradle/Kotlin build daemons from unrelated igo-app
+work were holding ~1.6GB on the Windows host) before completing on retry after those daemons
+were stopped (`./gradlew.bat --stop`). Nothing about the self-play run itself was implicated --
+worth remembering if a future long-running background job here gets killed unexpectedly:
+check for unrelated memory pressure on the host before assuming a bug in this pipeline.
+
 ## Open items as of this writing (end of 2026-09-05 session)
 
 - **Phase 3's self-play pass-collapse bug is resolved (section 19).**
@@ -758,10 +787,13 @@ closed; the natural next work is scaling this proven loop further
   deferred as disproportionate for this project's single-machine scale
   — revisit only if section 17's options don't pan out.
 - **Known-good checkpoints, in order of preference:**
-  `bootstrap_gen3_no_pass_guard_candidate.pt` (best overall — three
+  `bootstrap_gen4_no_pass_guard_candidate.pt` (best overall — four
   chained generations, each beating its predecessor: PROMOTE vs. the
-  pristine baseline 1597.9 vs. 1402.1, vs. its own gen2 parent 1582.7
-  vs. 1417.3, with 0/100 short games at every generation in the chain)
+  pristine baseline 1614.2 vs. 1385.8, vs. its own gen3 parent 1552.3
+  vs. 1447.7, with 0/100 short games at every generation in the chain;
+  see section 22) > `bootstrap_gen3_no_pass_guard_candidate.pt` (its
+  parent — PROMOTE vs. the pristine baseline 1597.9 vs. 1402.1, vs. its
+  own gen2 parent 1582.7 vs. 1417.3, 0/100 short games)
   > `bootstrap_gen2_no_pass_guard_candidate.pt` (its parent — PROMOTE
   vs. both the pristine baseline, 1579.6 vs. 1420.4, and its own gen1
   parent, 1595.4 vs. 1404.6, 0/100 short games) >

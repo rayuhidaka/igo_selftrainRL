@@ -1,0 +1,26 @@
+# Generation 4's self-play data, chained from bootstrap_gen3_no_pass_guard_candidate.pt --
+# the checkpoint that beat both the pristine baseline and its own gen2 parent (see
+# docs/SELF_PLAY_STABILITY.md section 21). Same full fix stack as gen1/gen2/gen3: root noise
+# excluding Pass (alpha=0.1), temperature annealing (temperature_drop_move=30), and the
+# structural no_pass_before_move=20 guard.
+#
+# Purpose: extend the proven chain one more generation (gen1/gen2/gen3 all came back 0/100
+# short games and each beat its predecessor) to widen igo-app's difficulty-tier spread
+# beyond gen2/gen3.
+
+checkpoint_path: checkpoints/bootstrap_gen3_no_pass_guard_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260906
+
+num_games: 100
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen4_no_pass_guard.npz
