@@ -936,6 +936,18 @@ Treating this as ordinary self-play generation-to-generation variance (the recip
 reduced the *frequency* of non-promotions, not their possibility entirely) and retrying with
 a fresh self-play seed before considering this a new plateau requiring investigation.
 
+**The retry (seed 314159) confirmed the ordinary-noise read.** Self-play: **0/300 short
+games**, 30,494 examples, 177m22s wall time. Fine-tuned and evaluated:
+
+- vs. its own generation-7 parent: **1565.5 vs. 1434.5 -- PROMOTE** (131-Elo gap).
+- vs. the pristine baseline: **1694.4 vs. 1305.6 -- PROMOTE**, the most decisive baseline
+  win of any generation so far.
+
+`bootstrap_gen8_no_pass_guard_candidate.pt` is the new best checkpoint, eight chained
+generations overall. Confirms attempt 1's non-promotion was exactly what it looked like --
+ordinary variance, resolved by one retry, not a new systemic issue requiring investigation
+like generation 5's plateau did.
+
 ## Open items as of this writing (end of 2026-09-05 session)
 
 - **Phase 3's self-play pass-collapse bug is resolved (section 19).**
@@ -978,11 +990,15 @@ a fresh self-play seed before considering this a new plateau requiring investiga
   deferred as disproportionate for this project's single-machine scale
   — revisit only if section 17's options don't pan out.
 - **Known-good checkpoints, in order of preference:**
-  `bootstrap_gen7_no_pass_guard_candidate.pt` (best overall — seven
+  `bootstrap_gen8_no_pass_guard_candidate.pt` (best overall — eight
   chained generations, each beating its predecessor: PROMOTE vs. the
-  pristine baseline 1605.8 vs. 1394.2, vs. its own gen6 parent 1571.9
-  vs. 1428.1, first full cycle confirming the 300-game recipe holds --
-  see section 25) > `bootstrap_gen6_no_pass_guard_candidate.pt` (its
+  pristine baseline 1694.4 vs. 1305.6 (the most decisive baseline win
+  yet), vs. its own gen7 parent 1565.5 vs. 1434.5 (on a retry after
+  attempt 1's non-promotion turned out to be ordinary noise) — see
+  section 26) > `bootstrap_gen7_no_pass_guard_candidate.pt` (its
+  parent — PROMOTE vs. the pristine baseline 1605.8 vs. 1394.2, vs. its
+  own gen6 parent 1571.9 vs. 1428.1, first full cycle confirming the
+  300-game recipe holds -- see section 25) > `bootstrap_gen6_no_pass_guard_candidate.pt` (its
   parent — PROMOTE vs. the pristine baseline 1655.2 vs. 1344.8, vs. its
   own gen5 parent 1556.8 vs. 1443.2, the generation that resolved the
   gen5 plateau by tripling self-play games -- see section 24's attempt 4)
