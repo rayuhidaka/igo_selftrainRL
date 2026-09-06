@@ -788,6 +788,31 @@ player on its own. A genuinely strong opponent would need a bigger lever than ge
 count alone (more games/generation, a bigger net, or substantially more compute) -- worth
 revisiting once the gen1-10 chain's trajectory is actually in hand.
 
+### 24. Generation 6's first "do not promote" -- a plateau/noise event, not a collapse (2026-09-06)
+
+Chained from `bootstrap_gen5_no_pass_guard_candidate.pt` with the identical recipe (4-worker
+parallel self-play, 25/75 mix fine-tune). Self-play was clean: **0/100 short games**, 9,907
+examples, 55m21s wall time. But evaluation gave the **first non-promoted generation in the
+entire gen1-gen6 chain**:
+
+- vs. its own generation-5 parent: **1413.1 vs. 1586.9 -- Do not promote.**
+- vs. the pristine baseline: **1634.2 vs. 1365.8 -- PROMOTE** (a *wider* margin than gen5's
+  own 1601.8 vs. 1398.2 against the same baseline).
+
+Read together, this isn't a collapse: `bootstrap_gen6_no_pass_guard_candidate.pt` is still a
+strong net -- it beats the pristine baseline more decisively than gen5 did -- it simply
+didn't come out ahead of gen5 specifically in this 40-game sample. Elo from small pairwise
+samples is not strictly transitive (different opponents probe different weaknesses), and the
+fine-tune step's training budget is small and noisy by design (`max_train_seconds: 60`,
+~1600 steps over a ~10k-example batch) -- a run of bad luck in that 60 seconds is a
+believable explanation, not something to over-investigate given five prior generations all
+worked cleanly with this exact recipe. Treating this as a plateau/noise event: **not**
+chaining generation 7 from this weaker `gen6` candidate. Instead, retrying generation 6's
+self-play + fine-tune + eval cycle with a new seed (`selfplay_self_play_gen6_no_pass_guard.yaml`'s
+seed bumped, chain parent unchanged at `bootstrap_gen5_no_pass_guard_candidate.pt`) to see if
+a different self-play sample produces a clean promote, before deciding whether this
+generation's difficulty (not the pipeline) needs a bigger fine-tune budget going forward.
+
 ## Open items as of this writing (end of 2026-09-05 session)
 
 - **Phase 3's self-play pass-collapse bug is resolved (section 19).**
