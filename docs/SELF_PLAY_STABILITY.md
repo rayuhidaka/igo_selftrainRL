@@ -874,6 +874,31 @@ the eval alone. Paused here, reporting the full picture and remaining options (m
 self-play games per generation, a capacity-ceiling diagnostic, or accepting gen5 as the
 current plateau) to the user rather than spending more compute unilaterally.
 
+**Attempt 4, tripling self-play games per generation -- resolved the plateau.** Per the
+user's choice among the laid-out options, tested the remaining untried lever: `num_games`
+raised from 100 to 300 (the top of the research's recommended 250-300 range), keeping the
+replay-buffer fine-tune mix from attempt 3. Self-play: **0/300 short games**, 29,467
+examples (3x the usual volume), 165m25s wall time with the 4-worker parallel runner (~3x
+attempt 3's self-play time, as expected for 3x the games). Fine-tune's mix updated to weight
+this much larger batch appropriately (10% `batch2.npz` / 15% `self_play_gen4` / 25%
+`self_play_gen5` / 50% `self_play_gen6`, same shape as attempt 3's mix). Evaluated with the
+80-game eval:
+
+- vs. its own generation-5 parent: **1556.8 vs. 1443.2 -- PROMOTE** (113.6-Elo gap, decisively
+  clear of the 50-Elo threshold -- the first clean promote after three 100-game attempts).
+- vs. the pristine baseline: **1655.2 vs. 1344.8 -- PROMOTE**, consistent with every prior
+  attempt's baseline win.
+
+**Conclusion confirmed: self-play data volume per generation was the real binding
+constraint.** Three independent 100-game attempts (two self-play samples, two fine-tune
+mixes) all failed to clear gen5; the first 300-game attempt cleared it decisively on the
+first try. `bootstrap_gen6_no_pass_guard_candidate.pt` is the new best checkpoint, and the
+chain resumes. **New standing recipe going forward (not reverting to the old
+100-games/25-75-mix/40-game-eval recipe):** 300 self-play games/generation, a replay-buffer
+fine-tune mix (small legacy `batch2.npz` anchor + a weighted window of recent self-play
+generations favoring the newest), and an 80-game eval against the immediate parent (40 games
+remains fine for the less-noisy baseline comparison, which has never been a close call).
+
 ## Open items as of this writing (end of 2026-09-05 session)
 
 - **Phase 3's self-play pass-collapse bug is resolved (section 19).**
@@ -916,11 +941,14 @@ current plateau) to the user rather than spending more compute unilaterally.
   deferred as disproportionate for this project's single-machine scale
   — revisit only if section 17's options don't pan out.
 - **Known-good checkpoints, in order of preference:**
-  `bootstrap_gen5_no_pass_guard_candidate.pt` (best overall — five
-  chained generations, each beating its predecessor: PROMOTE vs. the
-  pristine baseline 1601.8 vs. 1398.2, vs. its own gen4 parent 1557.4
-  vs. 1442.6, with 0/100 short games at every generation in the chain;
-  see section 23) > `bootstrap_gen4_no_pass_guard_candidate.pt` (its
+  `bootstrap_gen6_no_pass_guard_candidate.pt` (best overall — six chained
+  generations, each beating its predecessor: PROMOTE vs. the pristine
+  baseline 1655.2 vs. 1344.8, vs. its own gen5 parent 1556.8 vs. 1443.2,
+  the first generation trained on 300 self-play games instead of 100 --
+  see section 24's attempt 4) > `bootstrap_gen5_no_pass_guard_candidate.pt`
+  (its parent — PROMOTE vs. the pristine baseline 1601.8 vs. 1398.2, vs.
+  its own gen4 parent 1557.4 vs. 1442.6, with 0/100 short games at every
+  generation in the chain; see section 23) > `bootstrap_gen4_no_pass_guard_candidate.pt` (its
   parent — PROMOTE vs. the pristine baseline 1614.2 vs. 1385.8, vs. its
   own gen3 parent 1552.3 vs. 1447.7, 0/100 short games; see section 22)
   > `bootstrap_gen3_no_pass_guard_candidate.pt` (its parent — PROMOTE

@@ -380,24 +380,25 @@ scheduling, session length) is still to be decided — revisit when Phase
       igo-app — holding off on exporting every single generation to
       avoid churning the app's difficulty tiers mid-chain; revisiting
       once the chain reaches a natural stopping point near generation 10.
-- [ ] **Chain paused at generation 5 (2026-09-06):** three independent
-      generation-6 attempts (two self-play samples, two fine-tune data
-      mixes) all failed to promote against gen5, while all three beat
-      the pristine baseline solidly (1634.2 / 1659.1 / 1645.3, vs. gen5's
-      own 1601.8). A root-cause investigation ranked the missing
-      accumulated-self-play replay buffer as the most likely contributor
-      (established 9x9 self-play replications use 20-50x this project's
-      100 games/generation) and ruled out the fine-tune budget as
-      under-training (each self-play example already gets seen ~7.8x in
-      60 seconds). Testing that fix (a replay-buffer fine-tune mix +
-      wider 80-game eval) still didn't clear the promotion bar
-      (1515.4 vs. 1484.6, 30.8-Elo gap) — the free fixes didn't resolve
-      it, shifting the likely cause toward self-play volume itself. See
-      `docs/SELF_PLAY_STABILITY.md` section 24 for full numbers. Not
-      resuming the chain (no generation 7 yet) pending the user's
-      direction: more self-play games/generation (100→250-300, ~2.5-3hr),
-      a capacity-ceiling diagnostic, or accepting gen5 as the current
-      plateau.
+- [x] **Generation 5's plateau resolved — chain resumed (2026-09-06):**
+      three independent 100-game generation-6 attempts (two self-play
+      samples, two fine-tune data mixes) all beat the pristine baseline
+      but failed to promote against gen5. A root-cause investigation
+      ranked self-play data volume per generation as the most likely
+      contributor (established 9x9 self-play replications use 20-50x
+      this project's 100 games/generation), and ruled out the fine-tune
+      budget as under-training. A fourth attempt tripling `num_games` to
+      300 (keeping the replay-buffer fine-tune mix) resolved it
+      decisively on the first try: **0/300 short games**, PROMOTE vs.
+      gen5 (1556.8 vs. 1443.2) and vs. the pristine baseline (1655.2 vs.
+      1344.8). `bootstrap_gen6_no_pass_guard_candidate.pt` is the new
+      best checkpoint — six chained generations overall. See
+      `docs/SELF_PLAY_STABILITY.md` section 24 for the full
+      investigation and numbers. **New standing recipe going forward:**
+      300 self-play games/generation (not 100), a replay-buffer
+      fine-tune mix (small legacy anchor + recent generations' self-play,
+      favoring the newest), and an 80-game eval against the immediate
+      parent (40 remains fine for the baseline comparison).
 - [x] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`). Three fine-tuned generations are
       exported and on-device in igo-app so far (gen2/gen3/gen4); gen5 and

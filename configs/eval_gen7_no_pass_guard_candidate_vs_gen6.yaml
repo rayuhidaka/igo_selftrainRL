@@ -1,0 +1,10 @@
+# num_games=80 (not the old 40) is now the standard eval size going forward: a 22-Elo gap
+# at n=40 turned out to be statistically unresolvable noise during generation 6's
+# investigation -- see docs/SELF_PLAY_STABILITY.md section 24.
+board_size: 9
+num_games: 80
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_gen6_no_pass_guard_candidate.pt
+min_elo_gap: 50
