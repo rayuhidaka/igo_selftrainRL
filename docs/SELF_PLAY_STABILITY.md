@@ -813,6 +813,26 @@ seed bumped, chain parent unchanged at `bootstrap_gen5_no_pass_guard_candidate.p
 a different self-play sample produces a clean promote, before deciding whether this
 generation's difficulty (not the pipeline) needs a bigger fine-tune budget going forward.
 
+**The retry (seed 42) also failed to promote against gen5** -- a second independent
+self-play sample, same recipe otherwise:
+
+- vs. its own generation-5 parent: **1510.8 vs. 1489.2 -- Do not promote** (a ~22-Elo gap,
+  well under the 50-Elo promotion threshold -- much closer than the first attempt's 174-Elo
+  gap, essentially a statistical tie rather than a loss).
+- vs. the pristine baseline: **1659.1 vs. 1340.9 -- PROMOTE**, the most decisive baseline win
+  of any generation yet (wider than both gen5's 1601.8 vs. 1398.2 and the first gen6
+  attempt's 1634.2 vs. 1365.8).
+
+**Conclusion: this is a real plateau at gen5's strength level under the current recipe, not
+a one-off unlucky self-play sample.** Two independently-sampled self-play batches, fine-tuned
+identically, both failed to clear gen5 head-to-head -- one decisively, one essentially a
+coin-flip -- while both kept improving against the fixed pristine baseline. **Paused the
+chain here rather than attempting a third retry or chaining generation 7 from a
+non-promoted candidate.** Deep-dive into the likely cause(s) (network capacity, self-play
+data volume, fine-tune training budget, the 25/75 anchor mix, and eval statistical power)
+requested from the user and delegated to a research pass -- see whatever follow-up entry
+picks up from here once that's back, before deciding how to adjust the recipe and resume.
+
 ## Open items as of this writing (end of 2026-09-05 session)
 
 - **Phase 3's self-play pass-collapse bug is resolved (section 19).**

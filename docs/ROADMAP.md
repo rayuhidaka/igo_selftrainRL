@@ -380,6 +380,19 @@ scheduling, session length) is still to be decided — revisit when Phase
       igo-app — holding off on exporting every single generation to
       avoid churning the app's difficulty tiers mid-chain; revisiting
       once the chain reaches a natural stopping point near generation 10.
+- [ ] **Chain paused at generation 5 (2026-09-06):** two independent
+      generation-6 attempts (different self-play seeds, same recipe)
+      both failed to promote against gen5 — one a clear loss (1413.1 vs.
+      1586.9), one a near-tie (1510.8 vs. 1489.2, under the 50-Elo
+      threshold) — while both still beat the pristine baseline more
+      decisively than gen5 itself did. Reads as a real plateau at gen5's
+      strength under the current recipe (60s/~1600-step fine-tune, ~10k
+      self-play examples/generation, fixed 4-residual-block/64-channel
+      net), not a one-off unlucky sample. See
+      `docs/SELF_PLAY_STABILITY.md` section 24. Not resuming the chain
+      (no generation 7 yet) until a root-cause investigation (network
+      capacity vs. data volume vs. training budget vs. eval statistical
+      power) informs how to adjust the recipe.
 - [x] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`). Three fine-tuned generations are
       exported and on-device in igo-app so far (gen2/gen3/gen4); gen5 and
