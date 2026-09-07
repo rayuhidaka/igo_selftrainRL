@@ -7,10 +7,16 @@
 # failed 300-game attempts before resolving cleanly at 500 (see docs/ROADMAP.md's
 # generation 9 entry) -- starting gen10 at 500 games directly rather than repeating that
 # escalation. This is the final generation toward the user's original gen1-10 target.
+# Retry (seed bumped): attempt 1 (seed 20261007) did not promote against gen9 (1516.4 vs
+# 1483.6, a 32.8-Elo gap) -- but it beat the pristine baseline decisively (1681.0 vs
+# 1319.0, PROMOTE), so this reads as ordinary self-play variance (same shape as gen8's
+# first attempt, 38.2-Elo gap, resolved by a fresh-seed retry) rather than gen9's real
+# 52.8-Elo regression on its second attempt. Retrying once with a fresh seed per that
+# precedent before treating this as a real plateau.
 checkpoint_path: checkpoints/bootstrap_gen9_no_pass_guard_candidate.pt
 board_size: 9
 komi: 7.5
-seed: 20261007
+seed: 8675309
 
 num_games: 500
 max_moves: 200

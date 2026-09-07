@@ -448,10 +448,63 @@ scheduling, session length) is still to be decided — revisit when Phase
       a genuine strength win. Not yet exported to `.tflite` or on-device
       (see Phase 4 below, same "batch a representative spread" plan as
       gen5-8).
+- [x] **Generation 10 — the final generation of the user's original
+      "at least up to generation 10" target, resolved after three
+      candidates tried (2026-09-08):** self-play chained from
+      `bootstrap_gen9_no_pass_guard_candidate.pt`, 500 games (starting at
+      the elevated recipe directly rather than repeating gen9's 300→500
+      escalation). **Attempt 1** (seed 20261007): 0/500 short games, but
+      the candidate did not promote against gen9 (1516.4 vs. 1483.6, a
+      32.8-Elo gap) — though it beat the pristine baseline decisively
+      (1681.0 vs. 1319.0, PROMOTE), reading as ordinary variance (same
+      shape as generation 8's own first-attempt near-miss) rather than a
+      real plateau. **Attempt 2** (fresh seed 8675309, per the
+      generation-8 retry precedent): also 0/500 short games, and this one
+      *did* promote against gen9 (1537.5 vs. 1462.5, a 75-Elo gap) and
+      against baseline (1625.5 vs. 1374.5).
+
+      **A third candidate was also tried, at the user's own suggestion**:
+      since both attempts were clean, independently-seeded 500-game
+      batches, fine-tuning on their *combination* (~1000 games total,
+      weighted evenly against each other within the standard replay-
+      buffer mix) was tested as a way to get more/more-diverse data
+      without another 5-hour self-play run. Genuinely worth trying — but
+      the result was a useful **negative** finding: the combined-data
+      candidate did *not* promote against gen9 (1493.6 vs. 1506.4, a
+      12.8-Elo gap) despite also beating baseline decisively (1620.5 vs.
+      1379.5). Mixing two differently-seeded batches from the same
+      generation was not better than the plain single-seed attempt 2
+      here — plain attempt 2 remains the strongest and became the final
+      generation-10 checkpoint. Worth remembering as a real data point
+      before assuming "more/more-diverse data always helps" as a general
+      rule — it helped at the generation-6 and generation-9 plateaus
+      (more games from one seed) but not here (combining two seeds'
+      worth at the same total game count).
+
+      `bootstrap_gen10_no_pass_guard_candidate.pt` (attempt 2) is the
+      final checkpoint — **ten chained generations overall, each a
+      genuine strength win, completing the user's original gen1-10
+      target.** Training is paused here for now; a further generation 11
+      would need the user's go-ahead, not an automatic continuation.
+- [x] **Exported all ten generations to `.tflite` and verified on-device
+      (2026-09-08):** gen1 and gen5 through gen10 (gen2/gen3/gen4 were
+      already exported) — `python -m export.to_tflite --checkpoint
+      checkpoints/bootstrap_genN_no_pass_guard_candidate.pt --board-size 9
+      --out export/ray_zero_genN_no_pass_guard.tflite` for each,
+      numerically verified against their source PyTorch checkpoints (one
+      fixed board position through both, diffing policy/value outputs —
+      max diffs ~1.3e-7 to ~1.1e-6 across all seven, consistent float32
+      rounding noise, same magnitude as gen2-4's original exports).
+      Copied into `igo-app/app/src/main/assets/models/` alongside the
+      existing gen2/gen3/gen4 assets. All ten confirmed working under
+      Android's real on-device TFLite runtime via `igo-app`'s extended
+      `RayZeroModelOnDeviceTest` (10/10 passing on `MinSdk_API24`) — see
+      `igo-app/docs/ROADMAP.md` Phase 4 for the difficulty-picker rework
+      that went with this.
 - [x] Save checkpoints at intervals — these become candidate difficulty
-      tiers, gated on Elo (`eval/`). Three fine-tuned generations are
-      exported and on-device in igo-app so far (gen2/gen3/gen4); gen5 and
-      beyond exist as checkpoints but aren't exported yet (see above).
+      tiers, gated on Elo (`eval/`). **All ten fine-tuned generations are
+      now exported and on-device in igo-app** (see above) — the full
+      difficulty spread the user originally asked for.
 - [x] Elo rating math (`eval/elo.py`) and the promotion gate
       (`should_promote`) — fully implemented and tested
       (`tests/test_elo.py`). See `docs/ARCHITECTURE.md`'s "Difficulty-tier
@@ -520,10 +573,18 @@ scheduling, session length) is still to be decided — revisit when Phase
       numerically verified against the source checkpoint. Copied into
       `igo-app/app/src/main/assets/models/` alongside gen2/gen3.
       `RayZeroModelOnDeviceTest` extended to cover all three checkpoints.
-- [x] Hand off checkpoints to the app for the difficulty picker — gen2,
-      gen3, and gen4 are all exported, on-device, and wired into
-      igo-app's "Play vs Ray-zeroGo" difficulty picker (see
-      `igo-app/docs/ROADMAP.md` Phase 4).
+- [x] **Hand off ALL TEN checkpoints to the app, difficulty picker
+      redesigned for scale (2026-09-08):** gen1 and gen5 through gen10
+      exported and verified on-device (see the generation 10 entry above
+      for the full numbers) alongside the already-handed-off gen2/gen3/
+      gen4 — all ten now on-device and wired into igo-app's "Play vs
+      Ray-zeroGo" picker (see `igo-app/docs/ROADMAP.md` Phase 4). The
+      picker itself was redesigned from a fixed 3-button layout (which
+      only worked for three tiers) to a scrollable list labeled by
+      generation number, since ten tiers don't fit as buttons the way
+      three did. **This completes the user's original "at least up to
+      generation 10" request** — the full gen1-10 difficulty spread is
+      now in the app.
 - [ ] Optional Elo-over-generations chart in-app — not started; Elo
       numbers exist per-eval (see Phase 3 above) but aren't surfaced
       anywhere in igo-app's UI.

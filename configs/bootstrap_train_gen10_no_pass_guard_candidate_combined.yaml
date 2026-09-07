@@ -1,0 +1,40 @@
+# Generation 10's fine-tune, COMBINED-DATA variant: instead of a single 500-game self-play
+# batch, mixes BOTH gen10 attempts (attempt 1, seed 20261007, and attempt 2/the retry,
+# seed 8675309 -- see configs/selfplay_self_play_gen10_no_pass_guard.yaml's history comment)
+# as separate weighted sources, roughly 1000 games total for this generation. User's own
+# idea (2026-09-08): since both 500-game attempts are independently-seeded, mixing them
+# is not just "more data" but more diverse self-play trajectories than a single bigger
+# same-seed batch would give -- worth trying whether or not attempt 2 alone promotes.
+#
+# Same replay-buffer recipe otherwise (standing since generation 6, see
+# docs/SELF_PLAY_STABILITY.md section 24): small legacy anchor + weighted recent
+# generations, favoring the newest. The combined "gen10" weight (0.70) is split evenly
+# across both attempt files rather than going to attempt 2 alone.
+
+board_size: 9
+seed: 10
+init_from_checkpoint: checkpoints/bootstrap_gen9_no_pass_guard_candidate.pt
+
+checkpoint_out: checkpoints/bootstrap_gen10_no_pass_guard_candidate_combined.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_gen8_no_pass_guard.npz
+    weight: 0.10
+  - path: selfplay_games/self_play_gen9_no_pass_guard.npz
+    weight: 0.15
+  - path: selfplay_games/self_play_gen10_no_pass_guard_attempt1.npz
+    weight: 0.35
+  - path: selfplay_games/self_play_gen10_no_pass_guard_attempt2.npz
+    weight: 0.35
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_gen10_no_pass_guard_candidate_combined
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60
