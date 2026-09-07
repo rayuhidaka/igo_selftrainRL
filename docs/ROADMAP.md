@@ -415,26 +415,39 @@ scheduling, session length) is still to be decided — revisit when Phase
       pristine baseline (1694.4 vs. 1305.6 — the most decisive baseline
       win yet). New best checkpoint, eight chained generations overall.
       See `docs/SELF_PLAY_STABILITY.md` section 26.
-- [ ] **Generation 9 — interrupted twice by system memory pressure, resume
-      after a machine restart (2026-09-07):** self-play (chained from
-      `bootstrap_gen8_no_pass_guard_candidate.pt`, `configs/selfplay_self_play_gen9_no_pass_guard.yaml`,
-      same 300-game/4-worker recipe) was killed mid-run twice in a row by
-      the harness's low-memory guard — no single obvious culprit either
-      time (checked for stray Gradle/Kotlin daemons and a memory-heavy
-      browser, per earlier sessions' actual causes; neither was present
-      this time). Read as cumulative memory pressure from this session's
-      very long stretch of near-continuous background training (WSL had
-      been running for 1+ day uptime), not a bug in the training recipe.
-      **Resume point:** re-run `python -m selfplay.run_parallel --config
-      configs/selfplay_self_play_gen9_no_pass_guard.yaml --workers 4`
-      after the restart; if it's clean, continue: fine-tune
-      (`configs/bootstrap_train_gen9_no_pass_guard_candidate.yaml`) →
-      evaluate vs. gen8 (`configs/eval_gen9_no_pass_guard_candidate_vs_gen8.yaml`,
-      80 games) and vs. baseline (`configs/eval_gen9_no_pass_guard_candidate_vs_residual.yaml`,
-      40 games) → if promoted, gen10 is the final generation toward the
-      user's original gen1-10 target (its configs don't exist yet — build
-      them mirroring gen9's pattern, chained from
-      `bootstrap_gen9_no_pass_guard_candidate.pt`, once gen9 lands).
+- [x] **Generation 9 — resolved after a real memory-infra fight and two
+      failed eval attempts, promoted on a third try with more data
+      (2026-09-07):** self-play chained from `bootstrap_gen8_no_pass_guard_candidate.pt`
+      was killed mid-run four separate times by the harness's low-memory
+      guard — first twice pre-restart, then twice more *after* a clean
+      machine restart (ruling out "cumulative session pressure" as the
+      cause; the real issue was the harness's guard reacting to this
+      16GB host's tight baseline free memory, not to WSL's/self-play's
+      own usage, which stayed low the whole time). **Fix: self-play now
+      runs in the user's own detached WSL `tmux` session, outside Claude
+      Code's process tree entirely** — immune to the guard; fine-tune and
+      eval (both single-threaded, much lighter) still run fine through
+      Claude Code's own background-task mechanism.
+      Once unblocked, self-play itself ran clean on the first try
+      (300 games, 0 short/pass-biased) — but the resulting candidate did
+      not promote against gen8 (1495.7 vs. 1504.3, an 8.6-Elo wash). A
+      retry with a fresh seed (still 300 games), per the generation-8
+      precedent, made things **worse**, not better — a real 52.8-Elo loss
+      (1473.6 vs. 1526.4) — breaking that precedent. A diagnostic eval
+      against the pristine baseline showed the retry's candidate wasn't
+      broken (1676.2 vs. 1323.8, PROMOTE), pointing at "gen8 is an
+      unusually strong parent" (gen8's own retry had produced the most
+      decisive baseline win of the whole chain) rather than a gen9-specific
+      problem. Applied the same lever that fixed generation 6's plateau:
+      tripled — well, in this case bumped `num_games` 300 → 500 (fresh
+      seed). **Resolved decisively on this third attempt**: 0/500
+      short/pass-biased games, PROMOTE vs. gen8 (1611.5 vs. 1388.5, a
+      223-Elo gap — the most lopsided win of the whole chain) and vs. the
+      pristine baseline (1627.2 vs. 1372.8). `bootstrap_gen9_no_pass_guard_candidate.pt`
+      is the new best checkpoint — nine chained generations overall, each
+      a genuine strength win. Not yet exported to `.tflite` or on-device
+      (see Phase 4 below, same "batch a representative spread" plan as
+      gen5-8).
 - [x] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`). Three fine-tuned generations are
       exported and on-device in igo-app so far (gen2/gen3/gen4); gen5 and

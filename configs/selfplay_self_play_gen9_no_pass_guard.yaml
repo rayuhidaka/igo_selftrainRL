@@ -6,12 +6,27 @@
 # num_games=300 is the standing recipe since generation 6's plateau investigation --
 # see docs/SELF_PLAY_STABILITY.md section 24.
 
+# Retry 1 (seed bumped): attempt 1 (seed 20260906) did not promote against gen8 (1495.7 vs
+# 1504.3, an 8.6-Elo wash) -- per the gen8 precedent, retried once with a fresh seed
+# before treating this as a real plateau.
+#
+# Retry 2 (num_games bumped 300 -> 500, seed bumped again): attempt 2 (seed 271828, still
+# 300 games) made things WORSE, not better -- 1473.6 vs gen8's 1526.4, a real 52.8-Elo
+# regression, not a wash. Two failures in a row broke the gen8 pattern (single retry
+# fixing it) and reads like gen5/6's real plateau instead. But a diagnostic eval showed
+# attempt 2's candidate is NOT broken -- it beat the pristine baseline decisively (1676.2
+# vs 1323.8, PROMOTE) -- so this isn't "gen9's fine-tuning is broken," it's "gen8 is an
+# unusually strong parent" (gen8's own retry produced the most decisive baseline win of
+# the whole chain). Same shape as generation 6's plateau, which was fixed by tripling
+# num_games 100->300 (see docs/SELF_PLAY_STABILITY.md section 24) -- applying the same
+# lever here: more self-play data per generation to produce a stronger candidate capable
+# of clearing an unusually strong gen8. ~5hr estimated wall time at 500 games/4 workers.
 checkpoint_path: checkpoints/bootstrap_gen8_no_pass_guard_candidate.pt
 board_size: 9
 komi: 7.5
-seed: 20260906
+seed: 90210
 
-num_games: 300
+num_games: 500
 max_moves: 200
 num_simulations: 400
 temperature: 1.0
