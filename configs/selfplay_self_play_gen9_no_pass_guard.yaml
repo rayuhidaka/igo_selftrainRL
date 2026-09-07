@@ -1,0 +1,24 @@
+# Generation 9's self-play data, chained from bootstrap_gen8_no_pass_guard_candidate.pt.
+# Same full fix stack as gen1-gen8: root noise excluding Pass (alpha=0.1), temperature
+# annealing (temperature_drop_move=30), and the structural no_pass_before_move=20 guard.
+# Run via selfplay.run_parallel (not selfplay.self_play directly) to cut wall time.
+#
+# num_games=300 is the standing recipe since generation 6's plateau investigation --
+# see docs/SELF_PLAY_STABILITY.md section 24.
+
+checkpoint_path: checkpoints/bootstrap_gen8_no_pass_guard_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260906
+
+num_games: 300
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen9_no_pass_guard.npz

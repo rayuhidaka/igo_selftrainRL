@@ -1,0 +1,30 @@
+# Generation 6's self-play data, chained from bootstrap_gen5_no_pass_guard_candidate.pt.
+# Same full fix stack as gen1-gen5: root noise excluding Pass (alpha=0.1), temperature
+# annealing (temperature_drop_move=30), and the structural no_pass_before_move=20 guard.
+# Run via selfplay.run_parallel (not selfplay.self_play directly) to cut wall time --
+# see selfplay/run_parallel.py.
+#
+# Attempt 4 -- num_games tripled to 300 (from 100): three prior attempts (two self-play
+# samples, two fine-tune data mixes) all beat the pristine baseline but failed to promote
+# against gen5 (see docs/SELF_PLAY_STABILITY.md section 24). A root-cause investigation
+# ranked self-play data volume per generation as the most likely remaining lever --
+# established 9x9 self-play replications generate 20-50x this project's prior 100
+# games/generation. Testing that directly now that selfplay.run_parallel makes a larger
+# batch affordable (still ~2.5-3hr with 4 workers, not prohibitive).
+
+checkpoint_path: checkpoints/bootstrap_gen5_no_pass_guard_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 777
+
+num_games: 300
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen6_no_pass_guard.npz

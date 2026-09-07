@@ -1,0 +1,11 @@
+# num_games widened from the usual 40 to 80 (2026-09-06): the gen6 retry's vs-gen5 result
+# (1510.8 vs. 1489.2, a 22-Elo gap) was statistically indistinguishable from a coin flip at
+# n=40 -- see docs/SELF_PLAY_STABILITY.md section 24. A close call deserves a bigger sample
+# before defaulting to "do not promote".
+board_size: 9
+num_games: 80
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_gen5_no_pass_guard_candidate.pt
+min_elo_gap: 50
