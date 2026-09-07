@@ -1,0 +1,25 @@
+# Generation 10's self-play data, chained from bootstrap_gen9_no_pass_guard_candidate.pt.
+# Same full fix stack as gen1-gen9: root noise excluding Pass (alpha=0.1), temperature
+# annealing (temperature_drop_move=30), and the structural no_pass_before_move=20 guard.
+# Run via selfplay.run_parallel (not selfplay.self_play directly) to cut wall time.
+#
+# num_games=500 starting point (not the older 300-game standing recipe): gen9 needed two
+# failed 300-game attempts before resolving cleanly at 500 (see docs/ROADMAP.md's
+# generation 9 entry) -- starting gen10 at 500 games directly rather than repeating that
+# escalation. This is the final generation toward the user's original gen1-10 target.
+checkpoint_path: checkpoints/bootstrap_gen9_no_pass_guard_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20261007
+
+num_games: 500
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen10_no_pass_guard.npz
