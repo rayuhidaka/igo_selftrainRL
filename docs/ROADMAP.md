@@ -415,6 +415,26 @@ scheduling, session length) is still to be decided — revisit when Phase
       pristine baseline (1694.4 vs. 1305.6 — the most decisive baseline
       win yet). New best checkpoint, eight chained generations overall.
       See `docs/SELF_PLAY_STABILITY.md` section 26.
+- [ ] **Generation 9 — interrupted twice by system memory pressure, resume
+      after a machine restart (2026-09-07):** self-play (chained from
+      `bootstrap_gen8_no_pass_guard_candidate.pt`, `configs/selfplay_self_play_gen9_no_pass_guard.yaml`,
+      same 300-game/4-worker recipe) was killed mid-run twice in a row by
+      the harness's low-memory guard — no single obvious culprit either
+      time (checked for stray Gradle/Kotlin daemons and a memory-heavy
+      browser, per earlier sessions' actual causes; neither was present
+      this time). Read as cumulative memory pressure from this session's
+      very long stretch of near-continuous background training (WSL had
+      been running for 1+ day uptime), not a bug in the training recipe.
+      **Resume point:** re-run `python -m selfplay.run_parallel --config
+      configs/selfplay_self_play_gen9_no_pass_guard.yaml --workers 4`
+      after the restart; if it's clean, continue: fine-tune
+      (`configs/bootstrap_train_gen9_no_pass_guard_candidate.yaml`) →
+      evaluate vs. gen8 (`configs/eval_gen9_no_pass_guard_candidate_vs_gen8.yaml`,
+      80 games) and vs. baseline (`configs/eval_gen9_no_pass_guard_candidate_vs_residual.yaml`,
+      40 games) → if promoted, gen10 is the final generation toward the
+      user's original gen1-10 target (its configs don't exist yet — build
+      them mirroring gen9's pattern, chained from
+      `bootstrap_gen9_no_pass_guard_candidate.pt`, once gen9 lands).
 - [x] Save checkpoints at intervals — these become candidate difficulty
       tiers, gated on Elo (`eval/`). Three fine-tuned generations are
       exported and on-device in igo-app so far (gen2/gen3/gen4); gen5 and
