@@ -6,10 +6,16 @@
 # num_games=800, up from gen10's 500 -- more self-play data per generation, at the user's
 # request, rather than a reactive plateau fix (contrast gen6/gen9's 300->500 escalations,
 # which were responses to an actual stall).
+#
+# Retry (seed bumped): attempt 1 (seed 20260909) did not promote against gen10 (1483.2 vs.
+# 1516.8, a 33.6-Elo gap) but beat the pristine baseline decisively (1671.7 vs. 1328.3,
+# PROMOTE) -- the same shape as generation 8's and generation 10's own first-attempt
+# near-misses (ordinary self-play variance, not a new plateau). Retrying once with a fresh
+# seed per that precedent before treating this as a real issue.
 checkpoint_path: checkpoints/bootstrap_gen10_no_pass_guard_candidate.pt
 board_size: 9
 komi: 7.5
-seed: 20260909
+seed: 42424242
 
 num_games: 800
 max_moves: 200
