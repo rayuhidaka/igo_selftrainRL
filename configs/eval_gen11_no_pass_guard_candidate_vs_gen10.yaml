@@ -1,0 +1,7 @@
+board_size: 9
+num_games: 80
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_gen10_no_pass_guard_candidate.pt
+min_elo_gap: 50

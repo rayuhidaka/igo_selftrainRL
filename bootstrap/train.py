@@ -119,9 +119,21 @@ def _build_model(config: dict) -> RayZeroNet:
     return model
 
 
-def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor) -> None:
+def resolve_device(config: dict) -> torch.device:
+    """`config["device"]` is `"auto"` (default, prefer CUDA when available -- this pipeline's
+    self-play/eval stay CPU-only by design, see selfplay/self_play.py's module docstring on
+    why single-position MCTS inference doesn't benefit from a GPU; only this batched training
+    step does), or an explicit `"cpu"`/`"cuda"` override.
+    """
+    requested = config.get("device", "auto")
+    if requested == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return torch.device(requested)
+
+
+def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor, device: torch.device) -> None:
     loader, dataset_size = _build_loader(config)
-    print(f"Training on {dataset_size} examples ({len(loader)} batches/epoch, batch_size={config['batch_size']})")
+    print(f"Training on {dataset_size} examples ({len(loader)} batches/epoch, batch_size={config['batch_size']}) on {device}")
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
     max_train_seconds = config.get("max_train_seconds")
@@ -137,6 +149,11 @@ def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor) -> None:
     step = 0
     for epoch in range(config["epochs"]):
         for board_planes, policy_targets, value_targets, score_margin_targets in loader:
+            board_planes = board_planes.to(device)
+            policy_targets = policy_targets.to(device)
+            value_targets = value_targets.to(device)
+            score_margin_targets = score_margin_targets.to(device)
+
             predicted_policy, predicted_value, predicted_score = model(board_planes)
 
             # Cross-entropy against a soft (distribution, not single-label) policy target.
@@ -194,7 +211,9 @@ def main() -> None:
     model = _build_model(config)
 
     if config.get("data_source"):
-        train(model, config, monitor)
+        device = resolve_device(config)
+        model = model.to(device)
+        train(model, config, monitor, device)
     else:
         # Phase 1 fallback: no data to train on yet, just prove the export/loading path
         # with a fresh, untrained checkpoint -- see docs/ROADMAP.md's Phase 1.

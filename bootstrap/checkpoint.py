@@ -55,8 +55,12 @@ class CheckpointMetadata:
 
 
 def save_checkpoint(model: RayZeroNet, metadata: CheckpointMetadata, path: Path) -> None:
+    # Detached to CPU regardless of what device `model` lives on (training may run on a
+    # GPU, see bootstrap/train.py) -- load_checkpoint already forces map_location="cpu" on
+    # load, but saving CPU tensors keeps a raw torch.load(path) (no map_location) safe too.
+    state_dict = {key: value.cpu() for key, value in model.state_dict().items()}
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({_STATE_DICT_KEY: model.state_dict(), _METADATA_KEY: asdict(metadata)}, path)
+    torch.save({_STATE_DICT_KEY: state_dict, _METADATA_KEY: asdict(metadata)}, path)
 
 
 def load_checkpoint(path: Path) -> tuple[dict, Optional[CheckpointMetadata]]:

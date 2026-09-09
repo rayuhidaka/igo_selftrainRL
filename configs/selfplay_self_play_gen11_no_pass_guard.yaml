@@ -1,0 +1,24 @@
+# Generation 11's self-play data, chained from bootstrap_gen10_no_pass_guard_candidate.pt.
+# Same full fix stack as gen1-gen10: root noise excluding Pass (alpha=0.1), temperature
+# annealing (temperature_drop_move=30), and the structural no_pass_before_move=20 guard.
+# Run via selfplay.run_parallel (not selfplay.self_play directly) to cut wall time.
+#
+# num_games=800, up from gen10's 500 -- more self-play data per generation, at the user's
+# request, rather than a reactive plateau fix (contrast gen6/gen9's 300->500 escalations,
+# which were responses to an actual stall).
+checkpoint_path: checkpoints/bootstrap_gen10_no_pass_guard_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260909
+
+num_games: 800
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen11_no_pass_guard.npz
