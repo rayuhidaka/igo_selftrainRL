@@ -622,6 +622,24 @@ scheduling, session length) is still to be decided — revisit when Phase
       repo's own self-play generation code) — fixed on the igo-app side
       with a new `MctsConfig.noPassBeforeMove` guard. Full detail in
       `igo-app/docs/ROADMAP.md`.
+- [ ] **Blocking prerequisite for any further generation (gen12+),
+      decided 2026-09-10): every generation's opening move is weak.** An
+      igo-app-side spot-check ran all eleven generations' actual first
+      move from an empty board and found every one picks a weak,
+      non-star-point point (literal corners, edges, or near-edge points)
+      with no improving trend across the chain — see
+      `igo-app/docs/ROADMAP.md`'s "Model/search quality" section for the
+      full per-generation breakdown. Root cause, most likely: `eval/
+      promote.py` only measures *relative* Elo against a checkpoint's
+      own lineage, so a bias shared by the entire self-play population
+      is invisible to it by construction. **Decided: accepted as a known
+      limitation for the eleven generations that already exist (not
+      blocking anything currently shipped), but training gen12 on top of
+      this uncorrected bias would only deepen it, not fix it — so this
+      needs addressing (e.g. an external reference checkpoint or human
+      game records as an opening-move eval set, something `eval/
+      promote.py` doesn't have today) before any further chain work
+      starts.**
 - [ ] Optional Elo-over-generations chart in-app — not started; Elo
       numbers exist per-eval (see Phase 3 above) but aren't surfaced
       anywhere in igo-app's UI.
