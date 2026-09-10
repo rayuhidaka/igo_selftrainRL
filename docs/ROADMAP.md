@@ -640,6 +640,37 @@ scheduling, session length) is still to be decided — revisit when Phase
       game records as an opening-move eval set, something `eval/
       promote.py` doesn't have today) before any further chain work
       starts.**
-- [ ] Optional Elo-over-generations chart in-app — not started; Elo
-      numbers exist per-eval (see Phase 3 above) but aren't surfaced
-      anywhere in igo-app's UI.
+- [ ] **Round-robin tournament for real, cross-generation Elo reference
+      points (parked 2026-09-10, blocked on "truly complete" generation
+      training).** `eval/promote.py` only ever plays a candidate against
+      its immediate parent and the pristine baseline, resetting both to
+      `DEFAULT_INITIAL_RATING` (1500) each time (`eval/elo.py`) — so
+      none of the recorded per-generation Elo numbers are on a shared
+      scale; a candidate's "1611.5" from one match isn't comparable to
+      another's "1400" from a different match. Needed for two things:
+      igo-app's difficulty-tier curation (deciding which generations
+      become "Very Easy"/"Easy"/.../"Very Hard", and what those labels
+      actually mean in Elo terms — see `igo-app/docs/ROADMAP.md`) and,
+      later, estimating a *human* player's rating from results against
+      known-Elo AI tiers.
+
+      **Deliberately not scoped further right now** — which generations
+      to include is undecided until generation training is "truly
+      complete" (i.e. the weak-opening-move item above is resolved and
+      any further generations are trained), so picking specific tiers
+      now would likely need redoing. **Decided for whenever this does
+      happen:** ~40 games per pairing, and a new parallelized eval
+      script (mirroring `selfplay/run_parallel.py`'s pattern — `eval/
+      match.py`'s `play_match` currently runs strictly sequentially, no
+      worker-splitting) rather than running it sequentially over many
+      hours. Still open at that point: how many/which generations, and
+      whether to fit ratings via naive sequential `update_ratings`
+      calls (order-dependent, simpler) or a proper Bradley-Terry-style
+      simultaneous fit across the whole results table (more principled,
+      more code) — worth deciding once the actual generation set is
+      known.
+- [ ] **Optional Elo-over-generations chart in-app — parked, blocked on
+      the round-robin item above.** Existing per-eval Elo numbers aren't
+      on a shared scale (see above), so a chart plotting them as-is
+      would be misleading, not just incomplete. Revisit once real,
+      cross-generation ratings exist.
