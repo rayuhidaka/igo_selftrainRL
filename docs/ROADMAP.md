@@ -611,6 +611,17 @@ scheduling, session length) is still to be decided — revisit when Phase
       three did. **This completes the user's original "at least up to
       generation 10" request** — the full gen1-10 difficulty spread is
       now in the app.
+- [x] **Hand off generation 11 (2026-09-10):** exported, numerically
+      verified (~3.5e-7/6.0e-8 max policy/value diffs), and confirmed
+      on-device (`RayZeroModelOnDeviceTest`, 11/11 passing) — the first
+      generation past the original gen1-10 target. Also surfaced a real
+      bug during igo-app's own on-device verification: this checkpoint
+      opened a live game by silently passing its first move, run
+      through igo-app's plain deterministic `mcts/Mcts.kt` search (no
+      Dirichlet noise/no-pass-guard at inference time, unlike this
+      repo's own self-play generation code) — fixed on the igo-app side
+      with a new `MctsConfig.noPassBeforeMove` guard. Full detail in
+      `igo-app/docs/ROADMAP.md`.
 - [ ] Optional Elo-over-generations chart in-app — not started; Elo
       numbers exist per-eval (see Phase 3 above) but aren't surfaced
       anywhere in igo-app's UI.
