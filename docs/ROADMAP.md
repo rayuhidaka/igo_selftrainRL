@@ -486,10 +486,10 @@ scheduling, session length) is still to be decided — revisit when Phase
       genuine strength win, completing the user's original gen1-10
       target.** Training is paused here for now; a further generation 11
       would need the user's go-ahead, not an automatic continuation.
-- [ ] **Generation 11, past the original gen1-10 target, at the user's
-      go-ahead (started 2026-09-09):** also wired real GPU fine-tuning
-      (RTX 3050 via WSL, `bootstrap.train`'s new `device: auto/cpu/cuda`
-      config key) for the training step only — self-play and eval stay
+- [x] **Generation 11, past the original gen1-10 target, resolved on
+      retry (2026-09-09/10):** also wired real GPU fine-tuning (RTX 3050
+      via WSL, `bootstrap.train`'s new `device: auto/cpu/cuda` config
+      key) for the training step only — self-play and eval stay
       CPU-only, since single-position MCTS across separate worker
       processes doesn't benefit from a single shared GPU. Self-play
       chained from `bootstrap_gen10_no_pass_guard_candidate.pt` at
@@ -500,7 +500,18 @@ scheduling, session length) is still to be decided — revisit when Phase
       the pristine baseline decisively (1671.7 vs. 1328.3, PROMOTE),
       reading as ordinary variance (same shape as generation 8's and
       generation 10's own first-attempt near-misses) rather than a real
-      plateau. Retrying with a fresh seed (42424242) per that precedent.
+      plateau. **Attempt 2** (fresh seed 42424242, same recipe): PROMOTE
+      against both gen10 (1578.0 vs. 1422.0, a 156-Elo gap — the most
+      decisive gen-to-gen win since generation 9's 223-Elo jump) and the
+      pristine baseline (1653.2 vs. 1346.8). `bootstrap_gen11_no_pass_guard_candidate.pt`
+      (attempt 2) is the new best checkpoint — eleven chained generations
+      overall, the first past the original gen1-10 target. Both attempts
+      ran unattended overnight in a detached WSL `tmux` session
+      (`run_gen11.sh`, self-play → GPU fine-tune → eval x2), surviving a
+      machine reboot between them since the run itself had already
+      finished writing its log before the reboot happened. Not yet
+      exported to `.tflite` or wired into igo-app's difficulty picker —
+      that's a separate decision, see igo-app's own `docs/ROADMAP.md`.
 - [x] **Exported all ten generations to `.tflite` and verified on-device
       (2026-09-08):** gen1 and gen5 through gen10 (gen2/gen3/gen4 were
       already exported) — `python -m export.to_tflite --checkpoint
