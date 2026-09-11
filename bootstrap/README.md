@@ -8,7 +8,59 @@ existed), but this module trains every generation, not just the first.
 
 ## The net: `model.py`'s `RayZeroNet`
 
-A standard AlphaZero/KataGo-shaped policy/value net, `torch.nn.Module`:
+A standard AlphaZero/KataGo-shaped policy/value net, `torch.nn.Module`.
+Schematically (dashed edges only exist when `has_score_head=True`):
+
+```mermaid
+graph TD
+    input["board_planes\n[N, 3, H, W] NCHW\n(own / opponent / empty)"]
+
+    subgraph trunk [" Trunk — one of two, by num_residual_blocks "]
+        direction TB
+        choice{"num_residual_blocks > 0?"}
+        resPath["stem_conv 3x3 + BN + ReLU\n↓\nN × ResidualBlock\n(conv3x3+BN+ReLU → conv3x3+BN → +skip → ReLU)"]
+        plainPath["conv1 3x3 + ReLU → conv2 3x3 + ReLU\n→ conv3 3x3 + ReLU (if num_conv_layers ≥ 3)"]
+        choice -->|yes| resPath
+        choice -->|no| plainPath
+    end
+
+    input --> choice
+    resPath --> trunkOut["trunk features x\n[N, channels, H, W]"]
+    plainPath --> trunkOut
+
+    trunkOut --> pooled["global avg pool (H, W)\npooled [N, channels]"]
+    trunkOut --> policyConv["policy_conv 1x1\nchannels → 2, ReLU"]
+
+    policyConv --> policyFlat["flatten → [N, 2·H·W]"]
+    policyFlat --> policyFc["policy_fc: Linear\n→ [N, H·W] board-point logits"]
+    pooled --> passFc["pass_fc: Linear\nchannels → 1, pass logit"]
+    policyFc --> concat["concat(board logits, pass logit)"]
+    passFc --> concat
+    concat --> policyOut["softmax\npolicy [N, H·W + 1]"]
+
+    pooled --> valueFc1["value_fc1: Linear + ReLU"]
+    valueFc1 --> valueFc2["value_fc2: Linear → [N, 1]"]
+    valueFc2 --> valueOut["tanh\nvalue [N, 1] (+1 win / -1 loss / 0 even)"]
+
+    pooled -.-> scoreFc1["score_fc1: Linear + ReLU"]
+    scoreFc1 -.-> scoreFc2["score_fc2: Linear → [N, 1]"]
+    scoreFc2 -.-> scoreOut["score_margin [N, 1]\n(training-only, stripped at export)"]
+```
+
+- The trunk's two paths are mutually exclusive per checkpoint (never both
+  in the same forward pass) — which one exists is fixed at construction by
+  `num_residual_blocks`, not chosen dynamically per call.
+- `pooled` (the trunk's global-average-pooled features) is shared by three
+  independent heads: the pass logit, the value head, and — when present —
+  the score head. Only the spatial board-point logits come from
+  `policy_conv`/`policy_fc` instead.
+- `policy`'s `board_size**2 + 1` index convention (board points row-major,
+  then a trailing pass slot) is `docs/MODEL_CONTRACT.md`'s contract, not
+  incidental to this diagram — `bootstrap/dataset.py`'s policy targets and
+  `igo-app/inference/TfLitePolicyValueNet.kt`'s decoder both assume exactly
+  this layout.
+
+In prose:
 
 - **Trunk**: either a plain stack of `num_conv_layers` (2 or 3) same-padded
   3x3 convolutions, or — the current, stronger architecture — a `stem_conv`
