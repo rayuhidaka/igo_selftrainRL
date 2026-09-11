@@ -25,3 +25,27 @@ someone kept them in sync by hand.
 Board size is a parameter here too, not hardcoded to 9, matching
 `igo-app/engine/`'s own design (see its CLAUDE.md) — but nothing in
 `igo-training` needs anything other than 9x9 yet.
+
+## The rules algorithm itself
+
+`position.py`'s `Position` is immutable, same as the Kotlin side — `play()`
+returns a new `Position`, never mutates. Captures and suicide both reduce
+to the same two primitives: a flood-fill `_group_at` (connected
+same-colored stones from one point) and `_liberties` (every empty point
+orthogonally adjacent to a group). Playing a stone: any *opponent* group
+adjacent to the new stone that ends up with zero liberties is captured
+(removed); if nothing was captured and the newly-played stone's *own*
+group has zero liberties, the move is suicide (illegal). Ko is the simple/
+positional rule — a single-stone capture marks that point unplayable for
+one turn, no move-history-based superko.
+
+`scoring.py`'s `area_score` is Tromp-Taylor area scoring, computed by one
+flood-fill pass: every stone counts for its own color, every empty region
+counts for whichever color exclusively borders it (dame — bordered by
+both — counts for neither). **It assumes dead stones have already been
+captured** — there's no life/death resolution here, matching
+`igo-app/engine/`'s own documented limitation exactly. `mcts.py`'s `Mcts`
+only calls this once a position actually reaches two passes, so this
+matters for self-play/eval game quality (a game that ends with an
+uncaptured dead group on the board scores it for the wrong side), not for
+correctness of the function itself.

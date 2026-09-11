@@ -33,6 +33,46 @@ Phase 1 (scaffolding). See `docs/ROADMAP.md`.
    instead: torch's default PyPI wheel bundles ~10GB of CUDA/cuDNN
    dependencies that a CPU-only box will never use.
 
+## How the algorithm works
+
+An AlphaZero-shaped pipeline, split across six modules:
+
+- **`engine/`** and **`mcts/`** — Python ports of `igo-app/engine/` and
+  `igo-app/mcts/` (rules and PUCT search), used so this repo's self-play
+  and evaluation matches run against the *exact same* rules and search
+  algorithm the Android app itself plays with — see each folder's own
+  README for the port and for one deliberate divergence (self-play-only
+  root Dirichlet noise, not present on the Kotlin side).
+- **`bootstrap/`** — the net (`RayZeroNet`: a residual-tower policy/value
+  net, AlphaZero/KataGo-shaped) and the training loop that fits it to
+  data, whichever stage produced that data. See `bootstrap/README.md` for
+  the architecture and the loss.
+- **`selfplay/`** — produces the training data `bootstrap/` consumes, in
+  two stages: `generate.py` (Phase 2) distills moves directly from
+  `igo-app`'s existing strong KataGo checkpoint, no search — cheap, and
+  good enough for an initial imitation-learning warm start. `self_play.py`
+  (Phase 3) is genuine self-play: real MCTS search with Ray-zeroGo's own
+  current-best checkpoint, recording the search's visit-count distribution
+  (not the raw policy) as the training target — much more expensive per
+  move, but the actual reinforcement-learning loop that improves the net
+  past what it was distilled from.
+- **`eval/`** — Elo-rates a freshly-trained checkpoint against the current
+  shippable difficulty tier by playing real games between them
+  (`match.py`, using this repo's own `engine/`/`mcts/` ports), and decides
+  whether it's improved *enough* to promote (`elo.py`'s `should_promote`)
+  — checkpoints save often and cheaply during training, but only promoted
+  checkpoints become new difficulty levels in the app.
+- **`export/`** — converts a promoted `RayZeroNet` checkpoint to the
+  `.tflite` file `igo-app` actually loads.
+
+The generation loop is: `self_play.py` (current-best checkpoint) →
+`bootstrap/train.py` (fine-tune, optionally with dihedral augmentation) →
+`eval/promote.py` (does it beat the current tier?) → `export/to_tflite.py`
+(if promoted) → repeat with the new checkpoint as the next generation's
+self-play source. See `docs/ARCHITECTURE.md` for the full design and
+`docs/ROADMAP.md` for exactly how far around this loop the project has
+actually gotten.
+
 ## Output contract
 This pipeline's job is to produce `.tflite` checkpoints `igo-app` can load
 directly, conforming to `igo-app/docs/MODEL_CONTRACT.md` — the same
