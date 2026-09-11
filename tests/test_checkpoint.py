@@ -86,6 +86,34 @@ class BuildModelTest(unittest.TestCase):
         model = build_model(metadata, _BOARD_SIZE, has_score_head=True)
         self.assertTrue(hasattr(model, "score_fc1"))
 
+    def test_uses_metadatas_ownership_head_flag_when_no_explicit_override_is_given(self) -> None:
+        metadata = CheckpointMetadata(
+            board_size=_BOARD_SIZE, channels=8, num_conv_layers=3, has_ownership_head=True
+        )
+        model = build_model(metadata, _BOARD_SIZE)
+        self.assertTrue(hasattr(model, "ownership_conv"))
+
+    def test_an_explicit_ownership_head_override_wins_over_metadata(self) -> None:
+        metadata = CheckpointMetadata(
+            board_size=_BOARD_SIZE, channels=8, num_conv_layers=3, has_ownership_head=False
+        )
+        model = build_model(metadata, _BOARD_SIZE, has_ownership_head=True)
+        self.assertTrue(hasattr(model, "ownership_conv"))
+
+    def test_uses_metadatas_global_pooling_flag_when_no_explicit_override_is_given(self) -> None:
+        metadata = CheckpointMetadata(
+            board_size=_BOARD_SIZE, channels=8, num_conv_layers=3, num_residual_blocks=2, use_global_pooling=True
+        )
+        model = build_model(metadata, _BOARD_SIZE)
+        self.assertTrue(hasattr(model, "global_pooling"))
+
+    def test_an_explicit_global_pooling_override_wins_over_metadata(self) -> None:
+        metadata = CheckpointMetadata(
+            board_size=_BOARD_SIZE, channels=8, num_conv_layers=3, num_residual_blocks=2, use_global_pooling=False
+        )
+        model = build_model(metadata, _BOARD_SIZE, use_global_pooling=True)
+        self.assertTrue(hasattr(model, "global_pooling"))
+
 
 if __name__ == "__main__":
     unittest.main()

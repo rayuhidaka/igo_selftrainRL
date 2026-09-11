@@ -74,7 +74,7 @@ from bootstrap.dataset import SelfPlayExamples
 from bootstrap.inference import RayZeroPolicyValueNet, encode_planes
 from engine.move import Move, Pass
 from engine.position import Position
-from engine.scoring import AreaScore, area_score
+from engine.scoring import AreaScore, area_score, ownership_plane, territory_ownership
 from engine.stone import Stone
 from mcts.mcts import Mcts, MctsConfig
 from selfplay.generate import sample_move, score_margin
@@ -130,9 +130,12 @@ def play_one_game(
     rng: random.Random,
     temperature_drop_move: Optional[int] = None,
     no_pass_before_move: Optional[int] = None,
-) -> tuple[list[tuple[np.ndarray, np.ndarray, Stone]], "Stone | None", AreaScore]:
-    """Plays one self-play game and returns `(records, winner, final_area)`, where `records`
-    has one `(board_planes, policy_target, to_play)` tuple per move played.
+) -> tuple[list[tuple[np.ndarray, np.ndarray, Stone]], "Stone | None", AreaScore, dict]:
+    """Plays one self-play game and returns `(records, winner, final_area, final_ownership)`,
+    where `records` has one `(board_planes, policy_target, to_play)` tuple per move played
+    and `final_ownership` is `engine.scoring.territory_ownership`'s per-point read of the
+    game's actual final position (see that function's docstring for the same Tromp-Taylor
+    caveat `final_area` already carries: dead stones must already be resolved by play).
 
     `temperature_drop_move` (default `None`, meaning `temperature` applies for the whole
     game -- the original, unannealed behavior) switches to greedy move selection
@@ -175,9 +178,10 @@ def play_one_game(
         position = position.play(move)
         moves_played += 1
 
+    final_ownership = territory_ownership(position)
     final_area = area_score(position)
     winner = final_area.winner(komi)
-    return records, winner, final_area
+    return records, winner, final_area, final_ownership
 
 
 def main() -> None:
@@ -221,6 +225,7 @@ def main() -> None:
     all_policies: list[np.ndarray] = []
     all_values: list[float] = []
     all_scores: list[float] = []
+    all_ownership: list[list[float]] = []
 
     min_moves_to_keep = config.get("min_moves_to_keep", 0)
     max_mid_game_pass_weight = config.get("max_mid_game_pass_weight")
@@ -230,7 +235,7 @@ def main() -> None:
     start = time.time()
     games_played = 0
     for game_index in range(config["num_games"]):
-        records, winner, final_area = play_one_game(
+        records, winner, final_area, final_ownership = play_one_game(
             mcts,
             board_size,
             komi,
@@ -272,6 +277,7 @@ def main() -> None:
             all_policies.append(policy_target)
             all_values.append(z)
             all_scores.append(score_margin(final_area, komi, to_play, board_size))
+            all_ownership.append(ownership_plane(final_ownership, board_size, to_play))
 
         games_played += 1
         elapsed = time.time() - start
@@ -289,6 +295,7 @@ def main() -> None:
         policy_targets=np.stack(all_policies).astype(np.float32),
         value_targets=np.array(all_values, dtype=np.float32),
         score_margin_targets=np.array(all_scores, dtype=np.float32),
+        ownership_targets=np.array(all_ownership, dtype=np.float32),
     )
     out_path = Path(config["out_path"])
     examples.save(out_path)

@@ -9,7 +9,7 @@ import unittest
 
 import torch
 
-from bootstrap.model import RayZeroNet
+from bootstrap.model import GlobalPoolingBias, RayZeroNet
 
 _BOARD_SIZE = 5
 _BATCH = 2
@@ -18,7 +18,7 @@ _BATCH = 2
 class RayZeroNetForwardTest(unittest.TestCase):
     def _assert_correct_output_shapes(self, model: RayZeroNet) -> None:
         board_planes = torch.zeros(_BATCH, 3, _BOARD_SIZE, _BOARD_SIZE)
-        policy, value, score_margin = model(board_planes)
+        policy, value, score_margin, ownership = model(board_planes)
         self.assertEqual(policy.shape, (_BATCH, _BOARD_SIZE * _BOARD_SIZE + 1))
         self.assertEqual(value.shape, (_BATCH, 1))
         self.assertTrue(torch.allclose(policy.sum(dim=1), torch.ones(_BATCH), atol=1e-5))
@@ -27,6 +27,11 @@ class RayZeroNetForwardTest(unittest.TestCase):
             self.assertEqual(score_margin.shape, (_BATCH, 1))
         else:
             self.assertIsNone(score_margin)
+        if model.has_ownership_head:
+            self.assertEqual(ownership.shape, (_BATCH, _BOARD_SIZE * _BOARD_SIZE))
+            self.assertTrue(torch.all(ownership >= -1.0) and torch.all(ownership <= 1.0))
+        else:
+            self.assertIsNone(ownership)
 
     def test_plain_stack_architecture(self) -> None:
         self._assert_correct_output_shapes(RayZeroNet(board_size=_BOARD_SIZE, channels=8, num_conv_layers=3))
@@ -54,6 +59,50 @@ class RayZeroNetForwardTest(unittest.TestCase):
         model = RayZeroNet(board_size=_BOARD_SIZE, channels=8)
         self.assertFalse(hasattr(model, "score_fc1"))
         self._assert_correct_output_shapes(model)
+
+    def test_ownership_head_produces_a_real_output_when_enabled(self) -> None:
+        model = RayZeroNet(board_size=_BOARD_SIZE, channels=8, num_residual_blocks=2, has_ownership_head=True)
+        self._assert_correct_output_shapes(model)
+
+    def test_ownership_head_is_absent_by_default(self) -> None:
+        model = RayZeroNet(board_size=_BOARD_SIZE, channels=8)
+        self.assertFalse(hasattr(model, "ownership_conv"))
+        self._assert_correct_output_shapes(model)
+
+    def test_global_pooling_produces_correct_output_shapes(self) -> None:
+        model = RayZeroNet(board_size=_BOARD_SIZE, channels=8, num_residual_blocks=2, use_global_pooling=True)
+        self.assertTrue(hasattr(model, "global_pooling"))
+        self._assert_correct_output_shapes(model)
+
+    def test_global_pooling_is_absent_by_default(self) -> None:
+        model = RayZeroNet(board_size=_BOARD_SIZE, channels=8, num_residual_blocks=2)
+        self.assertFalse(hasattr(model, "global_pooling"))
+
+    def test_global_pooling_on_the_plain_stack_path_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            RayZeroNet(board_size=_BOARD_SIZE, channels=8, num_conv_layers=3, use_global_pooling=True)
+
+    def test_global_pooling_and_ownership_head_compose_with_every_other_option(self) -> None:
+        # The combination Option 3's new baseline config actually uses (see
+        # igo-app/docs/ROADMAP.md's "weak opening moves" item) -- global pooling, an
+        # ownership head, and a score head all enabled together on the residual path.
+        model = RayZeroNet(
+            board_size=_BOARD_SIZE,
+            channels=8,
+            num_residual_blocks=2,
+            use_global_pooling=True,
+            has_score_head=True,
+            has_ownership_head=True,
+        )
+        self._assert_correct_output_shapes(model)
+
+
+class GlobalPoolingBiasTest(unittest.TestCase):
+    def test_preserves_its_input_shape(self) -> None:
+        module = GlobalPoolingBias(channels=8)
+        x = torch.randn(_BATCH, 8, _BOARD_SIZE, _BOARD_SIZE)
+        y = module(x)
+        self.assertEqual(y.shape, x.shape)
 
 
 if __name__ == "__main__":

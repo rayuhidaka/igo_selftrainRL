@@ -44,6 +44,14 @@ class CheckpointMetadata:
     """Whether this checkpoint's RayZeroNet has the auxiliary score-margin regression head
     (see bootstrap/model.py's module docstring) -- False for every checkpoint before
     2026-09-03."""
+    use_global_pooling: bool = False
+    """Whether this checkpoint's RayZeroNet has the GlobalPoolingBias module after its
+    residual tower (see bootstrap/model.py's module docstring) -- False for every checkpoint
+    before 2026-09-11."""
+    has_ownership_head: bool = False
+    """Whether this checkpoint's RayZeroNet has the auxiliary per-point ownership regression
+    head (see bootstrap/model.py's module docstring) -- False for every checkpoint before
+    2026-09-11."""
     data_source: Optional[str] = None
     seed: Optional[int] = None
     elo: Optional[float] = None
@@ -81,11 +89,13 @@ def build_model(
     num_conv_layers: Optional[int] = None,
     num_residual_blocks: Optional[int] = None,
     has_score_head: Optional[bool] = None,
+    use_global_pooling: Optional[bool] = None,
+    has_ownership_head: Optional[bool] = None,
 ) -> RayZeroNet:
     """Constructs the `RayZeroNet` a checkpoint needs: an explicit `channels`/
-    `num_conv_layers`/`num_residual_blocks`/`has_score_head` always wins (for a legacy
-    checkpoint, or to deliberately override), otherwise `metadata`'s own values, otherwise
-    `RayZeroNet`'s current defaults.
+    `num_conv_layers`/`num_residual_blocks`/`has_score_head`/`use_global_pooling`/
+    `has_ownership_head` always wins (for a legacy checkpoint, or to deliberately override),
+    otherwise `metadata`'s own values, otherwise `RayZeroNet`'s current defaults.
     """
 
     def resolve(explicit, metadata_field: str):
@@ -99,6 +109,8 @@ def build_model(
         (num_conv_layers, "num_conv_layers"),
         (num_residual_blocks, "num_residual_blocks"),
         (has_score_head, "has_score_head"),
+        (use_global_pooling, "use_global_pooling"),
+        (has_ownership_head, "has_ownership_head"),
     ]:
         resolved = resolve(arg, metadata_field)
         if resolved is not None:

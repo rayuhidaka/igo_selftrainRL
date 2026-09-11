@@ -1,0 +1,28 @@
+# Phase A verification for the 2026-09-11 architecture upgrade (6 blocks/96 channels,
+# global pooling, ownership head) -- see igo-app/docs/ROADMAP.md's "weak opening moves"
+# item. Cheap smoke test only: confirms the new module/heads train without crashing or
+# producing NaNs on the *existing* batch2.npz data, and that export still works -- NOT the
+# real Phase B baseline retrain (that uses the full original 5400s budget, a fresh
+# checkpoint_out name, and is only run after this smoke test passes clean).
+
+board_size: 9
+seed: 9
+channels: 96
+num_residual_blocks: 6
+use_global_pooling: true
+has_score_head: true
+has_ownership_head: true
+
+checkpoint_out: checkpoints/smoke_test_new_architecture.pt
+data_source: selfplay_games/batch2.npz
+
+batch_size: 64
+learning_rate: 0.001
+epochs: 150
+
+log_dir: runs
+run_name: smoke_test_new_architecture
+log_every_n_steps: 25
+checkpoint_interval_steps: 5000
+
+max_train_seconds: 120

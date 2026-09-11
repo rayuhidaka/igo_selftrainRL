@@ -66,6 +66,8 @@ def _metadata_from_model_and_config(model: RayZeroNet, config: dict) -> Checkpoi
         num_conv_layers=model.num_conv_layers,
         num_residual_blocks=model.num_residual_blocks,
         has_score_head=model.has_score_head,
+        use_global_pooling=model.use_global_pooling,
+        has_ownership_head=model.has_ownership_head,
         data_source=_data_source_summary(config.get("data_source")),
         seed=config["seed"],
         init_from_checkpoint=config.get("init_from_checkpoint"),
@@ -78,13 +80,19 @@ def _build_loader(config: dict) -> tuple[DataLoader, int]:
     `bootstrap.dataset.build_training_loader` for why: anchoring a self-play fine-tune
     against a broader, known-good dataset alongside the new small batch prevents the
     self-play collapse documented in docs/ROADMAP.md's Phase 3).
+
+    `config["augment"]` (default `False`, every config before this option existed is
+    unaffected) enables `bootstrap.dataset`'s 8-fold dihedral symmetry augmentation -- see
+    `SelfPlayDataset`'s docstring, and igo-app/docs/ROADMAP.md's "weak opening moves" item
+    for why this exists.
     """
     data_source = config["data_source"]
+    augment = config.get("augment", False)
     if isinstance(data_source, list):
         sources = [(Path(item["path"]), item["weight"]) for item in data_source]
-        return build_training_loader(sources, config["batch_size"])
+        return build_training_loader(sources, config["batch_size"], augment=augment)
     examples = SelfPlayExamples.load(Path(data_source))
-    dataset = SelfPlayDataset(examples)
+    dataset = SelfPlayDataset(examples, augment=augment)
     loader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True, drop_last=True)
     return loader, len(dataset)
 
@@ -98,6 +106,8 @@ def _build_model(config: dict) -> RayZeroNet:
             num_conv_layers=config.get("num_conv_layers", 3),
             num_residual_blocks=config.get("num_residual_blocks", 0),
             has_score_head=config.get("has_score_head", False),
+            use_global_pooling=config.get("use_global_pooling", False),
+            has_ownership_head=config.get("has_ownership_head", False),
         )
     # Warm start (Phase 3's self-play fine-tuning, see docs/ROADMAP.md): continue training
     # an existing checkpoint instead of a fresh, randomly-initialized network. channels/
@@ -114,6 +124,8 @@ def _build_model(config: dict) -> RayZeroNet:
         num_conv_layers=config.get("num_conv_layers"),
         num_residual_blocks=config.get("num_residual_blocks"),
         has_score_head=config.get("has_score_head"),
+        use_global_pooling=config.get("use_global_pooling"),
+        has_ownership_head=config.get("has_ownership_head"),
     )
     model.load_state_dict(state_dict, strict=False)
     return model
@@ -144,17 +156,21 @@ def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor, device: tor
     # docs/SELF_PLAY_STABILITY.md), not to make the network chase score margin the way
     # AlphaGo found actively harmful when done directly.
     score_loss_weight = config.get("score_loss_weight", 0.15)
+    # Same rationale/default as score_loss_weight -- a regularizer alongside policy/value,
+    # not weighted to dominate them. See bootstrap/model.py's has_ownership_head docstring.
+    ownership_loss_weight = config.get("ownership_loss_weight", 0.15)
 
     start = time.time()
     step = 0
     for epoch in range(config["epochs"]):
-        for board_planes, policy_targets, value_targets, score_margin_targets in loader:
+        for board_planes, policy_targets, value_targets, score_margin_targets, ownership_targets in loader:
             board_planes = board_planes.to(device)
             policy_targets = policy_targets.to(device)
             value_targets = value_targets.to(device)
             score_margin_targets = score_margin_targets.to(device)
+            ownership_targets = ownership_targets.to(device)
 
-            predicted_policy, predicted_value, predicted_score = model(board_planes)
+            predicted_policy, predicted_value, predicted_score, predicted_ownership = model(board_planes)
 
             # Cross-entropy against a soft (distribution, not single-label) policy target.
             policy_loss = -(policy_targets * torch.log(predicted_policy + 1e-8)).sum(dim=1).mean()
@@ -166,6 +182,11 @@ def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor, device: tor
                 score_loss = torch.nn.functional.mse_loss(predicted_score.squeeze(-1), score_margin_targets)
                 loss = loss + score_loss_weight * score_loss
 
+            ownership_loss = None
+            if predicted_ownership is not None:
+                ownership_loss = torch.nn.functional.mse_loss(predicted_ownership, ownership_targets)
+                loss = loss + ownership_loss_weight * ownership_loss
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -176,6 +197,8 @@ def train(model: RayZeroNet, config: dict, monitor: TrainingMonitor, device: tor
                 monitor.log_scalar("loss/value", value_loss.item(), step)
                 if score_loss is not None:
                     monitor.log_scalar("loss/score_margin", score_loss.item(), step)
+                if ownership_loss is not None:
+                    monitor.log_scalar("loss/ownership", ownership_loss.item(), step)
                 monitor.log_scalar("loss/total", loss.item(), step)
 
             if step % config["checkpoint_interval_steps"] == 0:

@@ -1,0 +1,26 @@
+# Option 2 of the weak-opening follow-up plan: generation 12's self-play, same full fix
+# stack as gen1-gen11 (root noise excluding Pass alpha=0.1, temperature_drop_move=30,
+# no_pass_before_move=20). checkpoint_path defaults to plain gen11 (the safe default) --
+# self-play should come from the strongest available checkpoint (see
+# docs/SELF_PLAY_STABILITY.md section 5's principle), so IF Option 1
+# (bootstrap_gen11_augment_extended_candidate.pt) is run first and PROMOTES against plain
+# gen11 (see eval_gen11_augment_extended_candidate_vs_gen11.yaml), update checkpoint_path
+# below to that checkpoint before running this stage -- otherwise leave as-is.
+#
+# Run via selfplay.run_parallel (not selfplay.self_play directly) to cut wall time.
+checkpoint_path: checkpoints/bootstrap_gen11_no_pass_guard_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260911
+
+num_games: 800
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_gen12_augment.npz

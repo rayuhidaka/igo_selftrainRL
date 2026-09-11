@@ -107,6 +107,7 @@ def main() -> None:
             policy_targets=np.concatenate([s.policy_targets for s in shards]),
             value_targets=np.concatenate([s.value_targets for s in shards]),
             score_margin_targets=np.concatenate([s.score_margin_targets for s in shards]),
+            ownership_targets=np.concatenate([s.ownership_targets for s in shards]),
         )
         merged.save(final_out_path)
 

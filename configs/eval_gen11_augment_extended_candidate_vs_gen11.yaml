@@ -1,0 +1,11 @@
+# Strength gate for Option 1's extended-augmented candidate: this training change wasn't
+# just about opening moves, so it needs the same promotion check every other candidate gets
+# before being trusted as a self-play generator or chain parent -- a training-only change
+# could plausibly regress general strength independent of the opening-move fix.
+board_size: 9
+num_games: 80
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_gen11_no_pass_guard_candidate.pt
+min_elo_gap: 50

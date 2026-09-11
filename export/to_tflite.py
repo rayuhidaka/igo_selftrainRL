@@ -24,11 +24,11 @@ from bootstrap.checkpoint import build_model, load_checkpoint
 
 
 class _PolicyValueOnlyExportWrapper(torch.nn.Module):
-    """Strips RayZeroNet.forward()'s auxiliary score-margin output (see its module
-    docstring) before ONNX export -- the exported .tflite conforms to
+    """Strips RayZeroNet.forward()'s auxiliary score-margin/ownership outputs (see its
+    module docstring) before ONNX export -- the exported .tflite conforms to
     igo-app/docs/MODEL_CONTRACT.md's fixed policy+value contract regardless of whether the
-    source checkpoint has a score head at all, exactly like KataGo drops its own auxiliary
-    heads at export time (they're training-only, never used for actual play).
+    source checkpoint has a score or ownership head at all, exactly like KataGo drops its
+    own auxiliary heads at export time (they're training-only, never used for actual play).
     """
 
     def __init__(self, model: torch.nn.Module) -> None:
@@ -36,7 +36,7 @@ class _PolicyValueOnlyExportWrapper(torch.nn.Module):
         self.model = model
 
     def forward(self, board_planes: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        policy, value, _ = self.model(board_planes)
+        policy, value, _, _ = self.model(board_planes)
         return policy, value
 
 
@@ -115,11 +115,13 @@ def convert(
     num_conv_layers: int | None = None,
     num_residual_blocks: int | None = None,
     has_score_head: bool | None = None,
+    use_global_pooling: bool | None = None,
+    has_ownership_head: bool | None = None,
 ) -> bytes:
-    # channels/num_conv_layers/num_residual_blocks/has_score_head only need
-    # supplying for a legacy checkpoint (saved before bootstrap/checkpoint.py
-    # existed) or to deliberately override -- see bootstrap/checkpoint.py's
-    # build_model.
+    # channels/num_conv_layers/num_residual_blocks/has_score_head/use_global_pooling/
+    # has_ownership_head only need supplying for a legacy checkpoint (saved before
+    # bootstrap/checkpoint.py existed) or to deliberately override -- see
+    # bootstrap/checkpoint.py's build_model.
     state_dict, metadata = (None, None) if checkpoint is None else load_checkpoint(checkpoint)
     model = build_model(
         metadata,
@@ -128,6 +130,8 @@ def convert(
         num_conv_layers=num_conv_layers,
         num_residual_blocks=num_residual_blocks,
         has_score_head=has_score_head,
+        use_global_pooling=use_global_pooling,
+        has_ownership_head=has_ownership_head,
     )
     if state_dict is not None:
         model.load_state_dict(state_dict)
@@ -176,6 +180,12 @@ def main() -> None:
     parser.add_argument(
         "--has-score-head", type=bool, default=None, help="Only needed for a legacy checkpoint or to override"
     )
+    parser.add_argument(
+        "--use-global-pooling", type=bool, default=None, help="Only needed for a legacy checkpoint or to override"
+    )
+    parser.add_argument(
+        "--has-ownership-head", type=bool, default=None, help="Only needed for a legacy checkpoint or to override"
+    )
     args = parser.parse_args()
 
     tflite_bytes = convert(
@@ -186,6 +196,8 @@ def main() -> None:
         args.num_conv_layers,
         args.num_residual_blocks,
         args.has_score_head,
+        args.use_global_pooling,
+        args.has_ownership_head,
     )
     print(f"Wrote {args.out} ({len(tflite_bytes)} bytes)")
 

@@ -1,0 +1,40 @@
+# Option 1 of the weak-opening follow-up plan (see docs/ROADMAP.md and
+# igo-app/docs/ROADMAP.md's "weak opening moves" item): does *more* exposure under dihedral
+# augmentation alone -- no new self-play -- move the net further from corners toward star
+# points? Continues training from bootstrap_gen11_augment_candidate.pt (the 60s validation
+# checkpoint that already confirmed augmentation restores rotational symmetry: all 4 corners
+# ~equal probability instead of one favored edge), same data mix as gen11's own recipe (no
+# new self-play needed), just far longer -- 900s vs. the standard 60s -- to see whether
+# more time alone closes the remaining corners-over-star-points gap.
+#
+# epochs is set well above what 900s can reach (~9 epochs expected at the ~50 steps/sec
+# observed in the 60s validation run) so max_train_seconds is always the real cutoff, not
+# epoch exhaustion.
+
+board_size: 9
+seed: 11
+init_from_checkpoint: checkpoints/bootstrap_gen11_augment_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_gen11_augment_extended_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_gen9_no_pass_guard.npz
+    weight: 0.10
+  - path: selfplay_games/self_play_gen10_no_pass_guard.npz
+    weight: 0.15
+  - path: selfplay_games/self_play_gen11_no_pass_guard.npz
+    weight: 0.70
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 15
+
+log_dir: runs
+run_name: bootstrap_gen11_augment_extended_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 900

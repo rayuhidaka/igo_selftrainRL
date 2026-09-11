@@ -1,0 +1,41 @@
+# Option 2 of the weak-opening follow-up plan: generation 12's fine-tune, first real
+# generation trained with augment: true. Same standard budget/recipe as every other
+# generation (max_train_seconds: 60) -- deliberately NOT extended, to keep this a clean test
+# of "does a normal cycle with augmentation in the loop work" separate from Option 1's
+# "does more time alone help" question.
+#
+# init_from_checkpoint defaults to plain gen11 (matching selfplay_self_play_gen12_augment.yaml's
+# default self-play source) -- if Option 1's extended-augmented candidate promoted and was
+# used as gen12's self-play generator instead, update this to match (chain parent should be
+# whichever checkpoint actually generated this generation's self-play data).
+#
+# Replay-buffer mix: same shape as every generation since gen6 (docs/SELF_PLAY_STABILITY.md
+# section 24), window shifted one generation forward from gen11's own recipe.
+
+board_size: 9
+seed: 12
+init_from_checkpoint: checkpoints/bootstrap_gen11_no_pass_guard_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_gen12_augment_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_gen10_no_pass_guard.npz
+    weight: 0.10
+  - path: selfplay_games/self_play_gen11_no_pass_guard.npz
+    weight: 0.15
+  - path: selfplay_games/self_play_gen12_augment.npz
+    weight: 0.70
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_gen12_augment_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

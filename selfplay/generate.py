@@ -31,7 +31,7 @@ from bootstrap.inference import encode_planes
 from engine.move import Move, Pass, Play
 from engine.point import Point
 from engine.position import Position
-from engine.scoring import AreaScore, area_score
+from engine.scoring import AreaScore, area_score, ownership_plane, territory_ownership
 from engine.stone import Stone
 
 
@@ -115,9 +115,11 @@ def sample_move(size: int, policy: np.ndarray, temperature: float, rng: random.R
 
 def play_one_game(
     net: KataGoNet, board_size: int, komi: float, temperature: float, max_moves: int, rng: random.Random
-) -> tuple[list[tuple[np.ndarray, np.ndarray, Stone]], "Stone | None", AreaScore]:
-    """Plays one self-play game and returns `(records, winner, final_area)`, where `records`
-    has one `(board_planes, policy_target, to_play)` tuple per move played.
+) -> tuple[list[tuple[np.ndarray, np.ndarray, Stone]], "Stone | None", AreaScore, dict]:
+    """Plays one self-play game and returns `(records, winner, final_area, final_ownership)`,
+    where `records` has one `(board_planes, policy_target, to_play)` tuple per move played
+    and `final_ownership` is `engine.scoring.territory_ownership`'s per-point read of the
+    game's actual final position (same Tromp-Taylor caveat `final_area` already carries).
     """
     position = Position.empty(board_size)
     records: list[tuple[np.ndarray, np.ndarray, Stone]] = []
@@ -131,9 +133,10 @@ def play_one_game(
         position = position.play(move)
         moves_played += 1
 
+    final_ownership = territory_ownership(position)
     final_area = area_score(position)
     winner = final_area.winner(komi)
-    return records, winner, final_area
+    return records, winner, final_area, final_ownership
 
 
 def main() -> None:
@@ -149,11 +152,12 @@ def main() -> None:
     all_policies: list[np.ndarray] = []
     all_values: list[float] = []
     all_scores: list[float] = []
+    all_ownership: list[list[float]] = []
 
     start = time.time()
     games_played = 0
     for game_index in range(config["num_games"]):
-        records, winner, final_area = play_one_game(
+        records, winner, final_area, final_ownership = play_one_game(
             net, config["board_size"], config["komi"], config["temperature"], config["max_moves"], rng
         )
         for planes, policy_target, to_play in records:
@@ -167,6 +171,7 @@ def main() -> None:
             all_policies.append(policy_target)
             all_values.append(z)
             all_scores.append(score_margin(final_area, config["komi"], to_play, config["board_size"]))
+            all_ownership.append(ownership_plane(final_ownership, config["board_size"], to_play))
 
         games_played += 1
         elapsed = time.time() - start
@@ -184,6 +189,7 @@ def main() -> None:
         policy_targets=np.stack(all_policies).astype(np.float32),
         value_targets=np.array(all_values, dtype=np.float32),
         score_margin_targets=np.array(all_scores, dtype=np.float32),
+        ownership_targets=np.array(all_ownership, dtype=np.float32),
     )
     out_path = Path(config["out_path"])
     examples.save(out_path)

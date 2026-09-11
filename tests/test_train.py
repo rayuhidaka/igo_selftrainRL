@@ -69,6 +69,32 @@ class BuildModelTest(unittest.TestCase):
         # The trunk transferred correctly; only the new head is freshly initialized.
         self.assertTrue(torch.equal(source_model.stem_conv.weight, warm_started_model.stem_conv.weight))
 
+    def test_warm_starting_can_add_an_ownership_head_and_global_pooling_the_source_never_had(self) -> None:
+        # Same use case as the score-head test above, for the two architecture additions
+        # Option 3's new baseline actually needs (see igo-app/docs/ROADMAP.md's "weak
+        # opening moves" item): both must come out freshly initialized, and the trunk must
+        # still transfer, when warm-starting from a checkpoint saved before either existed.
+        source_model = RayZeroNet(board_size=_BOARD_SIZE, channels=6, num_residual_blocks=2)
+        metadata = CheckpointMetadata(board_size=_BOARD_SIZE, channels=6, num_conv_layers=3, num_residual_blocks=2)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint_path = Path(tmp) / "source.pt"
+            save_checkpoint(source_model, metadata, checkpoint_path)
+
+            config = {
+                "board_size": _BOARD_SIZE,
+                "init_from_checkpoint": str(checkpoint_path),
+                "has_ownership_head": True,
+                "use_global_pooling": True,
+            }
+            warm_started_model = _build_model(config)
+
+        self.assertTrue(warm_started_model.has_ownership_head)
+        self.assertTrue(hasattr(warm_started_model, "ownership_conv"))
+        self.assertTrue(warm_started_model.use_global_pooling)
+        self.assertTrue(hasattr(warm_started_model, "global_pooling"))
+        self.assertTrue(torch.equal(source_model.stem_conv.weight, warm_started_model.stem_conv.weight))
+
 
 class MetadataFromModelAndConfigTest(unittest.TestCase):
     def test_records_the_models_actual_architecture_and_the_warm_start_source(self) -> None:
@@ -84,6 +110,21 @@ class MetadataFromModelAndConfigTest(unittest.TestCase):
         self.assertEqual(metadata.channels, 6)
         self.assertEqual(metadata.num_residual_blocks, 2)
         self.assertEqual(metadata.init_from_checkpoint, "checkpoints/parent.pt")
+
+    def test_records_global_pooling_and_ownership_head_flags(self) -> None:
+        model = RayZeroNet(
+            board_size=_BOARD_SIZE,
+            channels=6,
+            num_residual_blocks=2,
+            use_global_pooling=True,
+            has_ownership_head=True,
+        )
+        config = {"seed": 7, "data_source": "selfplay_games/gen1.npz"}
+
+        metadata = _metadata_from_model_and_config(model, config)
+
+        self.assertTrue(metadata.use_global_pooling)
+        self.assertTrue(metadata.has_ownership_head)
 
     def test_init_from_checkpoint_is_none_for_a_from_scratch_run(self) -> None:
         model = RayZeroNet(board_size=_BOARD_SIZE)

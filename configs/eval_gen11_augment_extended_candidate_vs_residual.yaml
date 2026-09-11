@@ -1,0 +1,9 @@
+# Standard secondary check: still beats the pristine baseline decisively, same as every
+# other candidate in this project's history.
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual.pt
+min_elo_gap: 50
