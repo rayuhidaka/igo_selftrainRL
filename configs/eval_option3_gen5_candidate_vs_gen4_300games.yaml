@@ -1,0 +1,10 @@
+# Option 3, generation 5: does it beat gen4's 300-game candidate (the real parent
+# and current-strongest checkpoint in this restart)?
+
+board_size: 9
+num_games: 80
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_option3_gen4_300games_candidate.pt
+min_elo_gap: 50
