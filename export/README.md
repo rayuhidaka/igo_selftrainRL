@@ -7,12 +7,13 @@
 
 ## The pipeline: PyTorch → ONNX → TFLite
 
-1. **Strip the auxiliary head.** `_PolicyValueOnlyExportWrapper` calls the
-   real model and discards `score_margin` before export — the exported net
-   always conforms to the contract's fixed `(policy, value)` two-tensor
-   output regardless of whether the source checkpoint has a score head at
-   all, exactly like KataGo drops its own auxiliary heads at export time
-   (they're training-only, never used for actual play).
+1. **Strip the auxiliary heads.** `_PolicyValueOnlyExportWrapper` calls the
+   real model and discards `score_margin`/`ownership` before export — the
+   exported net always conforms to the contract's fixed `(policy, value)`
+   two-tensor output regardless of whether the source checkpoint has a
+   score head, an ownership head, both, or neither, exactly like KataGo
+   drops its own auxiliary heads at export time (they're training-only,
+   never used for actual play).
 2. **`torch.onnx.export`** with a dummy `[1, 3, board_size, board_size]`
    NCHW input (`RayZeroNet.forward`'s native layout — see `bootstrap/model.py`'s
    docstring for why nothing pre-permutes to NHWC before this step), named

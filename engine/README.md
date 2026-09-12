@@ -39,13 +39,28 @@ group has zero liberties, the move is suicide (illegal). Ko is the simple/
 positional rule — a single-stone capture marks that point unplayable for
 one turn, no move-history-based superko.
 
-`scoring.py`'s `area_score` is Tromp-Taylor area scoring, computed by one
-flood-fill pass: every stone counts for its own color, every empty region
-counts for whichever color exclusively borders it (dame — bordered by
-both — counts for neither). **It assumes dead stones have already been
-captured** — there's no life/death resolution here, matching
-`igo-app/engine/`'s own documented limitation exactly. `mcts.py`'s `Mcts`
-only calls this once a position actually reaches two passes, so this
-matters for self-play/eval game quality (a game that ends with an
-uncaptured dead group on the board scores it for the wrong side), not for
-correctness of the function itself.
+`scoring.py`'s `area_score` is Tromp-Taylor area scoring, implemented in
+terms of `territory_ownership` (one flood-fill pass, tallied): every stone
+counts for its own color, every empty region counts for whichever color
+exclusively borders it (dame — bordered by both — counts for neither).
+**It assumes dead stones have already been captured** — there's no
+life/death resolution here, matching `igo-app/engine/`'s own documented
+limitation exactly (both sides now share this exact structure —
+`Scoring.kt`'s `areaScore()` also delegates to its own `territoryOwnership()`,
+consolidated 2026-09-11 after the two had drifted independently while
+still agreeing numerically). `mcts.py`'s `Mcts` only calls `area_score`
+once a position actually reaches two passes, so this matters for
+self-play/eval game quality (a game that ends with an uncaptured dead
+group on the board scores it for the wrong side), not for correctness of
+the function itself.
+
+`territory_ownership(position)` exposes the same per-point read `area_score`
+tallies into totals — `dict[Point, Optional[Stone]]`, the occupant's own
+color if a point is a stone, the bordering color for surrounded empty
+territory, `None` for dame/neutral. Added 2026-09-11 as the training data
+source for `bootstrap/model.py`'s spatial ownership auxiliary head (see
+`bootstrap/README.md`) — `selfplay/self_play.py`/`selfplay/generate.py`
+call it once per finished game and convert it per-recorded-position via
+`ownership_plane(ownership, board_size, perspective)`, a flat (no numpy —
+`engine/` stays dependency-light), row-major `+1`/`-1`/`0`-per-point list
+relative to whichever color is "mine" at that recorded position.

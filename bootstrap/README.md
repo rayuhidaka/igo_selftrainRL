@@ -9,7 +9,9 @@ existed), but this module trains every generation, not just the first.
 ## The net: `model.py`'s `RayZeroNet`
 
 A standard AlphaZero/KataGo-shaped policy/value net, `torch.nn.Module`.
-Schematically (dashed edges only exist when `has_score_head=True`):
+Schematically (dashed edges only exist when the corresponding flag is on —
+`use_global_pooling` for the `GlobalPoolingBias` branch, `has_score_head`/
+`has_ownership_head` for their respective heads):
 
 ```mermaid
 graph TD
@@ -25,11 +27,16 @@ graph TD
     end
 
     input --> choice
-    resPath --> trunkOut["trunk features x\n[N, channels, H, W]"]
+    resPath --> trunkOut["trunk features\n[N, channels, H, W]"]
     plainPath --> trunkOut
 
-    trunkOut --> pooled["global avg pool (H, W)\npooled [N, channels]"]
-    trunkOut --> policyConv["policy_conv 1x1\nchannels → 2, ReLU"]
+    trunkOut --> gpChoice{"use_global_pooling?"}
+    gpChoice -->|yes| globalPooling["GlobalPoolingBias\n(mean / width-scaled mean / max, pooled → Linear → +bias)"]
+    gpChoice -->|no| x["x"]
+    globalPooling --> x["x\n[N, channels, H, W]"]
+
+    x --> pooled["global avg pool (H, W)\npooled [N, channels]"]
+    x --> policyConv["policy_conv 1x1\nchannels → 2, ReLU"]
 
     policyConv --> policyFlat["flatten → [N, 2·H·W]"]
     policyFlat --> policyFc["policy_fc: Linear\n→ [N, H·W] board-point logits"]
@@ -45,20 +52,31 @@ graph TD
     pooled -.-> scoreFc1["score_fc1: Linear + ReLU"]
     scoreFc1 -.-> scoreFc2["score_fc2: Linear → [N, 1]"]
     scoreFc2 -.-> scoreOut["score_margin [N, 1]\n(training-only, stripped at export)"]
+
+    x -.-> ownershipConv["ownership_conv 1x1\nchannels → 1"]
+    ownershipConv -.-> ownershipOut["tanh, flatten\nownership [N, H·W]\n(training-only, stripped at export)"]
 ```
 
 - The trunk's two paths are mutually exclusive per checkpoint (never both
   in the same forward pass) — which one exists is fixed at construction by
-  `num_residual_blocks`, not chosen dynamically per call.
-- `pooled` (the trunk's global-average-pooled features) is shared by three
-  independent heads: the pass logit, the value head, and — when present —
-  the score head. Only the spatial board-point logits come from
-  `policy_conv`/`policy_fc` instead.
+  `num_residual_blocks`, not chosen dynamically per call. Same for
+  `GlobalPoolingBias`: `use_global_pooling` only ever applies on the
+  residual path (`RayZeroNet.__init__` raises `ValueError` if set with
+  `num_residual_blocks == 0`).
+- `x` (trunk features, after the optional global-pooling bias) feeds four
+  independent things: `pooled` (mean over space, in turn shared by the pass
+  logit, the value head, and — when present — the score head), the spatial
+  `policy_conv`/`policy_fc` path, and — when present — the spatial
+  `ownership_conv` head. `ownership` reads `x` directly (not `pooled`) since
+  it needs a prediction *per point*, not one pooled summary.
 - `policy`'s `board_size**2 + 1` index convention (board points row-major,
   then a trailing pass slot) is `docs/MODEL_CONTRACT.md`'s contract, not
   incidental to this diagram — `bootstrap/dataset.py`'s policy targets and
   `igo-app/inference/TfLitePolicyValueNet.kt`'s decoder both assume exactly
-  this layout.
+  this layout. `ownership`'s `board_size**2` layout (also flat, row-major,
+  no trailing pass slot — passing has no "owner") matches it deliberately,
+  for the same reason `bootstrap/dataset.py`'s `ownership_targets` and
+  `engine/scoring.py`'s `ownership_plane` are flat too.
 
 In prose:
 
@@ -88,9 +106,32 @@ In prose:
   near ±1 with no signal distinguishing an efficient win from a lucky one
   — see the module docstring for the real self-play collapse this was
   diagnosed against, and `docs/SELF_PLAY_STABILITY.md`.
+- **`GlobalPoolingBias`** (`use_global_pooling=True` only, every checkpoint
+  before 2026-09-11 has it off) — a KataGo-derived module (see its own
+  class docstring for the full citation and reasoning) applied once, right
+  after the trunk, before any head reads from it. Pools the trunk's own
+  features (mean, a board-width-scaled mean, and max, per channel) and
+  biases them back in via a linear layer, letting the otherwise-local 3x3
+  convolutions condition on whole-board context — e.g. "is a symmetric
+  corner or a star point the better opening move right now," a judgment
+  local convolution alone can't make. Added alongside dihedral augmentation
+  as a joint fix attempt for `igo-app/docs/ROADMAP.md`'s "weak opening
+  moves" item, after augmentation alone (restoring rotational symmetry)
+  didn't move corner-preference to star points on its own.
+- **Auxiliary ownership head** (`has_ownership_head=True` only, same
+  2026-09-11 cutoff) — per-point ownership regression (`ownership_conv`,
+  `tanh`, flattened to `[N, board_size**2]`), `+1`/`-1` per point from the
+  player-to-move's perspective, `0` neutral/dame — KataGo's own biggest
+  sample-efficiency win (a wrong per-point prediction gives localized
+  gradient feedback, needing far fewer self-play games to learn correct
+  credit assignment than a single scalar value/score target). Simpler than
+  KataGo's own categorical/pdf-cdf ownership scheme — plain MSE regression,
+  consistent with this file's existing (simpler) choice for the score head.
+  Training-only, like the score head — stripped at export.
 
-`forward()` always returns `(policy, value, score_margin)`, with
-`score_margin` as `None` when `has_score_head` is off.
+`forward()` always returns a 4-tuple, `(policy, value, score_margin,
+ownership)`, with `score_margin`/`ownership` each `None` when their
+respective flag (`has_score_head`/`has_ownership_head`) is off.
 
 ## The training loop: `train.py`
 
@@ -100,8 +141,10 @@ policy distributions (a *soft* target — the opponent's actual move for
 `self_play.py` data — not a single hard label), plus MSE between predicted
 and target value (`z`: `+1`/`-1`/`0`, the actual game outcome from that
 position's player-to-move perspective), plus — when the model has a score
-head — a weighted-down (`score_loss_weight`, default `0.15`) MSE term on
-score margin. All three sum into one loss `backward()`s through.
+head and/or an ownership head — a weighted-down (`score_loss_weight`/
+`ownership_loss_weight`, both default `0.15`) MSE term on score margin
+and/or per-point ownership. Every present term sums into one loss
+`backward()`s through.
 
 Two things make this more than a plain "load data, train" loop:
 
@@ -131,13 +174,20 @@ always once more at the end, with retries against a real transient
 
 `SelfPlayDataset(augment=True)` applies a freshly-random one of the
 board's 8 dihedral symmetries (4 rotations × optional mirror) to each
-example's `board_planes` *and* `policy_target` **consistently** — the
-`_apply_dihedral_transform` function's whole job is making sure a stone's
-new position after the transform and the policy target's peak at that same
-point still agree, since a mismatch there would train the wrong
-board-to-move association, actively worse than no augmentation at all (6
-tests in `../tests/test_dataset.py` exist specifically to catch that).
-`value`/`score_margin` targets are orientation-invariant scalars, untouched.
+example's `board_planes`, `policy_target`, *and* `ownership_target`
+**consistently** — `_apply_dihedral_transform` (board + policy) and
+`_apply_dihedral_transform_to_ownership` (kept as a separate function so
+the former's existing signature/tests stay untouched) both build on a
+shared `_rotate_flip` primitive, and `SelfPlayDataset.__getitem__` draws
+exactly one `transform_index` per item and reuses it for all three, so
+they can never drift to different orientations relative to each other.
+The whole point is that a stone's new position after the transform and the
+policy target's peak (and the ownership target's per-point values) at that
+same point must still agree, since a mismatch there would train the wrong
+association, actively worse than no augmentation at all (test coverage in
+`../tests/test_dataset.py` exists specifically to catch that, for both the
+board/policy pair and ownership). `value`/`score_margin` targets are
+orientation-invariant scalars, untouched.
 
 This is standard AlphaZero/AlphaGo Zero practice that this pipeline
 initially skipped — see `igo-app/docs/ROADMAP.md`'s "weak opening moves"
@@ -151,9 +201,11 @@ ongoing fix status.
 ## Supporting files
 
 - **`checkpoint.py`** — `save_checkpoint`/`load_checkpoint` plus
-  `CheckpointMetadata` (architecture, data source, seed, warm-start
-  lineage) saved alongside every checkpoint's weights, and `build_model`,
-  which reconstructs a `RayZeroNet` with the right architecture from that
+  `CheckpointMetadata` (architecture — including `use_global_pooling`/
+  `has_ownership_head` alongside the older `has_score_head`/
+  `num_residual_blocks`/etc. — plus data source, seed, warm-start lineage)
+  saved alongside every checkpoint's weights, and `build_model`, which
+  reconstructs a `RayZeroNet` with the right architecture from that
   metadata (falling back to explicit `channels`/`num_conv_layers`/etc.
   arguments only for a legacy checkpoint saved before this metadata
   existed).

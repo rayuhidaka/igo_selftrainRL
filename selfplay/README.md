@@ -32,8 +32,17 @@ via `generate.py`'s `sample_move` — not necessarily the highest-visit move,
 this is exploration data generation, not "play the best move" like
 `eval/match.py`. The game continues until two passes in a row or
 `max_moves`, then every recorded position gets its `z` (win/loss/tie, from
-that position's own player-to-move perspective) and normalized score
-margin filled in from the final `area_score` + `komi`.
+that position's own player-to-move perspective), normalized score margin
+(from the final `area_score` + `komi`), and — since 2026-09-11, training
+`bootstrap/model.py`'s ownership head — an `ownership_target` filled in.
+Both `play_one_game`s (here and `generate.py`'s) compute
+`engine.scoring.territory_ownership` **once**, against the game's actual
+final position, right alongside `area_score`; each recorded position then
+gets that same final read reprojected through `ownership_plane` from *its
+own* player-to-move's perspective (`+1` mine / `-1` opponent's / `0`
+neutral) — the ownership target is the same underlying ground truth for
+every position in a game, only the sign convention rotates with whose turn
+it was.
 
 Four config knobs shape *how* that exploration happens, each fixing a
 distinct self-play collapse failure mode diagnosed in

@@ -704,6 +704,63 @@ scheduling, session length) is still to be decided — revisit when Phase
          augmentation on from generation 1, effectively redoing Phase 3.
          Large enough a commitment it should get its own explicit
          go-ahead, not a default next step.
+
+      **Update 2026-09-11/12 — all three options run; Option 3 (the
+      architecture upgrade + full restart) is where things stand now:**
+
+      - **Option 1 ran, didn't close the gap.** The 900s extended
+        fine-tune tightened rotational symmetry further (all 4 corners
+        within ~4.3-5.0%, tighter than the 60s candidate) but still
+        surfaced zero star points, and its Elo gap vs. plain gen11
+        (~47) fell just short of the ≥50 promotion bar. Per this file's
+        own pre-staged decision rule, gen12's configs were left at their
+        default (plain gen11), not repointed to the extended candidate.
+      - **Option 2 (gen12) ran, promoted, still no star points.** 60
+        Elo vs. gen11 (clears the bar this time), but spot-check still
+        showed corners, just more evenly balanced (top-5 mass dropped
+        from gen11's 41% to gen12's 16%) — real progress on symmetry,
+        not on the actual star-point question.
+      - **Architecture research + upgrade, before starting Option 3.**
+        Read KataGo's own paper (Wu et al. 2020, "Accelerating Self-Play
+        Learning in Go") directly rather than guessing — this net's own
+        architecture history was never driven to a proven capacity
+        ceiling the way the two prior upgrades were, and KataGo's actual
+        fix for "whole-board strategic judgment" problems (exactly this
+        symptom) is global pooling + a spatial ownership auxiliary
+        target, not raw capacity. Implemented: `bootstrap/model.py`
+        gained `GlobalPoolingBias` and a per-point ownership head (6
+        residual blocks/96 channels also adopted, up from 4/64, matching
+        KataGo's own conservative starting size) — full detail in
+        `bootstrap/README.md`. 111/111 tests passing, a clean smoke-train
+        verified before committing to the real Option 3 restart.
+      - **Option 3 executed**, a full restart from a new pristine
+        baseline (`bootstrap_batch2_residual_v2.pt`, retrained on
+        existing `batch2.npz` at the new architecture — the old baseline
+        can't warm-start into the new channel/block count). Gen1-gen3
+        each promoted, with a genuinely different opening pattern than
+        anything the original chain produced — top-5 policy mass kept
+        dropping (52% pristine → 17% gen1 → ~12% gen2/gen3) and gen1
+        specifically had zero corners in its top-5 (a first). **gen4 (at
+        the standard 100 games) lost to gen3 head-to-head** — the
+        vs-parent Elo gap had shrunk monotonically the whole way
+        (gen2 +235 → gen3 +95 → gen4 −36), a real plateau, not noise.
+        Per standing user instruction, a **300-game retry of gen4**
+        (escalating games, mirroring the original chain's own gen6/gen9
+        reactive escalations) was launched from gen3 — in progress as of
+        this writing, result not yet known.
+      - **No generation of the restart, gen1 through gen4, ever produced
+        an actual star-point preference** — the flattened policy's top-5
+        settled into a corner-leaning-but-uncertain pattern in gen3/gen4
+        specifically. The restart is a clear improvement (far more
+        opening diversity, no single-corner overconfidence) but the
+        original question is still open.
+      - **igo-app already shipped gen1/gen2/gen3 of this restart**,
+        replacing the entire old gen1-11 chain (not layered alongside
+        it) — see `igo-app/docs/ROADMAP.md`'s Phase 6. If the gen4 retry
+        (or a later generation) promotes, it becomes a 4th+ tier there;
+        if the restart's own plateau turns out to be a hard ceiling
+        without further architecture/data work, gen3 may remain the
+        practical endpoint for a while.
 - [ ] **Round-robin tournament for real, cross-generation Elo reference
       points (parked 2026-09-10, blocked on "truly complete" generation
       training).** `eval/promote.py` only ever plays a candidate against
