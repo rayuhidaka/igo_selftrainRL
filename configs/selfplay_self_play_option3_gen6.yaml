@@ -1,0 +1,22 @@
+# Option 3, generation 6. Parent is gen5 (promoted +105.8 Elo vs gen4, +392.4 Elo vs
+# baseline -- the strongest checkpoint in this restart, and also the first generation
+# whose opening spot-check top-5 moves were entirely center/near-center with no
+# corners). Staying at the 300-game recipe -- gen5 promoted decisively at 300, so no
+# reason to step back down to 100.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen5_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260916
+
+num_games: 300
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen6.npz
