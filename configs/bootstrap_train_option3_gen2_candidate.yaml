@@ -1,0 +1,33 @@
+# Option 3, generation 2 fine-tune. init_from_checkpoint is gen1's candidate.
+#
+# Replay-buffer mix: anchor weight on batch2.npz eases down as the chain grows (0.3 at
+# gen1 -> 0.2 here), gen1's own self-play joins as a second anchor, newest data still
+# dominates -- same ramping-window shape as the original chain's gen6+ recipe
+# (docs/SELF_PLAY_STABILITY.md section 24), just starting the ramp from gen1 this time
+# instead of retrofitting it after a collapse.
+
+board_size: 9
+seed: 2
+init_from_checkpoint: checkpoints/bootstrap_option3_gen1_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_option3_gen2_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.2
+  - path: selfplay_games/self_play_option3_gen1.npz
+    weight: 0.2
+  - path: selfplay_games/self_play_option3_gen2.npz
+    weight: 0.6
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_option3_gen2_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

@@ -1,0 +1,9 @@
+# Option 3, generation 4 retry vs. the new-architecture pristine baseline.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual_v2.pt
+min_elo_gap: 50

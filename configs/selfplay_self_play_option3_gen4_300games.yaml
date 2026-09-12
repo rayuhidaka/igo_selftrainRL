@@ -1,0 +1,25 @@
+# Option 3, generation 4 retry at 300 games (up from 100) -- the 100-game attempt
+# (bootstrap_option3_gen4_candidate.pt) lost to its own parent (gen3, -36 Elo), the
+# vs-parent Elo gap having shrunk monotonically gen2->gen3->gen4 (+235 -> +95 -> -36) --
+# a real plateau, not noise. Mirrors the original chain's own reactive escalation
+# (gen6/gen9 both bumped num_games after hitting a plateau at the standing recipe).
+#
+# checkpoint_path is gen3's candidate, NOT the failed gen4 -- gen3 remains the best
+# checkpoint from this restart until a candidate actually beats it.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen3_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260913
+
+num_games: 300
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen4_300games.npz

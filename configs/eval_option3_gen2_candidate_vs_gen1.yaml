@@ -1,0 +1,10 @@
+# Option 3, generation 2: does it actually beat its own parent (gen1)? Same settings as
+# gen12's own vs-parent eval (configs/eval_gen12_augment_candidate_vs_gen11.yaml).
+
+board_size: 9
+num_games: 80
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_option3_gen1_candidate.pt
+min_elo_gap: 50

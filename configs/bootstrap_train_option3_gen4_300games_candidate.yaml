@@ -1,0 +1,33 @@
+# Option 3, generation 4 retry fine-tune. init_from_checkpoint is gen3's candidate (the
+# real parent for this retry). Same replay-buffer mix ratios as the original gen4 attempt
+# -- build_training_loader's weights are proportions of each training batch, independent
+# of how many games a source actually has, so a bigger new self-play batch doesn't need a
+# different ratio, just more positions to sample from within its existing 0.70 share.
+
+board_size: 9
+seed: 40
+init_from_checkpoint: checkpoints/bootstrap_option3_gen3_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_option3_gen4_300games_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_option3_gen2.npz
+    weight: 0.10
+  - path: selfplay_games/self_play_option3_gen3.npz
+    weight: 0.15
+  - path: selfplay_games/self_play_option3_gen4_300games.npz
+    weight: 0.70
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_option3_gen4_300games_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

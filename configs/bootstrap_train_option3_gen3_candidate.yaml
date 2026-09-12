@@ -1,0 +1,32 @@
+# Option 3, generation 3 fine-tune. init_from_checkpoint is gen2's candidate.
+#
+# Replay-buffer mix continues the taper: batch2.npz anchor down again (0.2 at gen2 -> 0.15
+# here), gen1's own weight eases as gen2 joins the mix, newest data still dominates.
+
+board_size: 9
+seed: 3
+init_from_checkpoint: checkpoints/bootstrap_option3_gen2_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_option3_gen3_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.15
+  - path: selfplay_games/self_play_option3_gen1.npz
+    weight: 0.10
+  - path: selfplay_games/self_play_option3_gen2.npz
+    weight: 0.15
+  - path: selfplay_games/self_play_option3_gen3.npz
+    weight: 0.60
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_option3_gen3_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

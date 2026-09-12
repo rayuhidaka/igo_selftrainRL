@@ -1,0 +1,20 @@
+# Option 3, generation 3 self-play. checkpoint_path is gen2's candidate. Still no plateau
+# observed (gen2 promoted decisively, ~235 Elo vs gen1) -- num_games stays at 100 per the
+# reactive-only-on-plateau schedule.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen2_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260912
+
+num_games: 100
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen3.npz

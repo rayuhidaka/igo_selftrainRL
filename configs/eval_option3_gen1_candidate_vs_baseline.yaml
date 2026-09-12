@@ -1,0 +1,11 @@
+# Option 3, generation 1: does the new-architecture baseline's first self-play fine-tune
+# actually play better than the checkpoint it came from? Same settings as gen12's own
+# vs-baseline eval (configs/eval_gen12_augment_candidate_vs_residual.yaml).
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_batch2_residual_v2.pt
+min_elo_gap: 50

@@ -1,0 +1,38 @@
+# Option 3's new pristine baseline (see igo-app/docs/ROADMAP.md's "weak opening moves"
+# item): a necessary consequence of the 2026-09-11 architecture upgrade
+# (GlobalPoolingBias + ownership head + 6 blocks/96 channels, up from 4/64) --
+# bootstrap_batch2_residual.pt can't be warm-started into the new channel/block count
+# (shape mismatch, strict=False only covers missing keys not mismatched shapes), so this
+# retrains a fresh baseline on the SAME existing batch2.npz distillation data (no new
+# self-play needed), full training budget -- mirrors exactly how both prior architecture
+# upgrades (wide-stack, then residual tower) were each validated by retraining on this
+# same data before being used for self-play. Already smoke-tested clean at 120s
+# (configs/bootstrap_train_new_architecture_smoke_test.yaml) before this real run.
+#
+# batch2.npz predates score_margin/ownership targets -- both are zero-filled placeholders
+# here (see bootstrap/dataset.py's SelfPlayExamples.load), so both heads start
+# under-trained/neutral-biased from this checkpoint. Expected, not a bug: real ownership
+# signal only starts flowing once gen1's own self-play data (which WILL have real
+# territory_ownership targets) gets trained on.
+
+board_size: 9
+seed: 9
+channels: 96
+num_residual_blocks: 6
+use_global_pooling: true
+has_score_head: true
+has_ownership_head: true
+
+checkpoint_out: checkpoints/bootstrap_batch2_residual_v2.pt
+data_source: selfplay_games/batch2.npz
+
+batch_size: 64
+learning_rate: 0.001
+epochs: 150
+
+log_dir: runs
+run_name: bootstrap_batch2_residual_v2
+log_every_n_steps: 250
+checkpoint_interval_steps: 5000
+
+max_train_seconds: 5400  # same 90-min budget as bootstrap_train_batch2_residual.yaml

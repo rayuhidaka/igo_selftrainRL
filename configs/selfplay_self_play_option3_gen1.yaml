@@ -1,0 +1,32 @@
+# Option 3, generation 1 self-play (see igo-app/docs/ROADMAP.md's "weak opening moves"
+# item): the actual restart, from the new architecture's baseline
+# (bootstrap_batch2_residual_v2.pt -- see configs/bootstrap_train_batch2_residual_v2.yaml).
+#
+# num_games=100 deliberately mirrors the ORIGINAL chain's own gen1 (not gen11/12's 800) --
+# per the user's explicit instruction, start at the same count as before and escalate
+# reactively (100 -> 300 -> 500 -> 800) only if an actual plateau is observed, same as the
+# original chain's own history, not a fixed schedule.
+#
+# Every self-play-stability fix the original chain only adopted reactively, generation by
+# generation, is ON here from the start: root_dirichlet noise (excluding Pass,
+# alpha=0.1 tuned for 9x9, not 19x19's 0.03), temperature_drop_move=30,
+# no_pass_before_move=20 -- see docs/SELF_PLAY_STABILITY.md for why each exists. This is
+# the whole point of redoing the chain, not just the net.
+#
+# Run via selfplay.run_parallel, not selfplay.self_play directly, to cut wall time.
+checkpoint_path: checkpoints/bootstrap_batch2_residual_v2.pt
+board_size: 9
+komi: 7.5
+seed: 20260911
+
+num_games: 100
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen1.npz

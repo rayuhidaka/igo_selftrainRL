@@ -1,0 +1,37 @@
+# Option 3, generation 1 fine-tune. init_from_checkpoint is the new architecture's baseline
+# (bootstrap_batch2_residual_v2.pt), not the old bootstrap_batch2_residual.pt -- shape
+# mismatch, can't warm-start across the channel/block count change.
+#
+# Replay-buffer mix: anchored against batch2.npz from the very first generation this time
+# (the original chain only added this after a real self-play collapse at gen2+ --
+# docs/SELF_PLAY_STABILITY.md section 24 -- baking it in from gen1 here rather than waiting
+# to observe the same collapse again). 0.3/0.7 is a starting ratio, not tuned against data
+# that doesn't exist yet -- revisit if gen1's actual result looks anchored too weakly/strongly.
+#
+# augment: true from the very first generation -- the dihedral-symmetry fix
+# (bootstrap/dataset.py) applied from the start of the chain, not retrofitted late like the
+# original chain's augment work was.
+
+board_size: 9
+seed: 1
+init_from_checkpoint: checkpoints/bootstrap_batch2_residual_v2.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_option3_gen1_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.3
+  - path: selfplay_games/self_play_option3_gen1.npz
+    weight: 0.7
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_option3_gen1_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

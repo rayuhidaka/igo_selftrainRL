@@ -1,0 +1,10 @@
+# Option 3, generation 3: does it beat its own parent (gen2)? Same settings as every
+# prior vs-parent eval this cycle.
+
+board_size: 9
+num_games: 80
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/bootstrap_option3_gen2_candidate.pt
+min_elo_gap: 50

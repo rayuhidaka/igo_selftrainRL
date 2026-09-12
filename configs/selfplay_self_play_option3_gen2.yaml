@@ -1,0 +1,22 @@
+# Option 3, generation 2 self-play. checkpoint_path is gen1's candidate (the strongest
+# available checkpoint, per docs/SELF_PLAY_STABILITY.md section 5's principle) -- gen1's
+# result was a genuinely different, more diverse opening policy (not a plateau), so
+# num_games stays at 100 rather than escalating, per the reactive-only-on-plateau schedule.
+# Same stability-fix stack as gen1, unchanged.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen1_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260912
+
+num_games: 100
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen2.npz
