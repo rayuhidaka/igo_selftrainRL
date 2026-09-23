@@ -1,0 +1,33 @@
+# Option 3, generation 8 fine-tune. init_from_checkpoint is gen7 (the real parent).
+# Mix ratios shift by one generation from gen7's own recipe (batch2 0.05 /
+# gen5 0.10 / gen6 0.15 / gen7-new 0.70): gen5 is dropped, gen6 takes its old 0.10
+# slot, gen7 takes gen6's old 0.15 slot, gen8-new gets the same 0.70 dominant share
+# every generation in this restart has used.
+
+board_size: 9
+seed: 8
+init_from_checkpoint: checkpoints/bootstrap_option3_gen7_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_option3_gen8_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_option3_gen6.npz
+    weight: 0.10
+  - path: selfplay_games/self_play_option3_gen7.npz
+    weight: 0.15
+  - path: selfplay_games/self_play_option3_gen8.npz
+    weight: 0.70
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_option3_gen8_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

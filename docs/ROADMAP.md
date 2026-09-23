@@ -761,6 +761,122 @@ scheduling, session length) is still to be decided — revisit when Phase
         if the restart's own plateau turns out to be a hard ceiling
         without further architecture/data work, gen3 may remain the
         practical endpoint for a while.
+
+      **Update 2026-09-12/13 — gen4 retry through gen7, real strength
+      trend continues, gen6 shipped, gen7 held pending investigation:**
+      the 300-game gen4 retry (from gen3, not the failed 100-game
+      attempt) promoted cleanly (+71 Elo vs. gen3), and gen5/gen6/gen7
+      followed at the same 300-game recipe, each reviewed before the
+      next launched:
+
+      | Gen | vs. parent | vs. baseline | Opening spot-check |
+      |---|---|---|---|
+      | gen4 (300g) | +71, PROMOTE | +229, PROMOTE | still corner-leaning |
+      | gen5 | +105.8, PROMOTE | +392.4, PROMOTE | first fully center/near-center top-5, zero corners (tengen 5.56%, flattest yet) |
+      | gen6 | +305.4, PROMOTE | +452.2, PROMOTE | tengen jumps to 30.26% — first sharply-peaked result |
+      | gen7 | +116.6, PROMOTE | +452.2 (see below) | tengen jumps again to 71.12% |
+
+      gen5 was a genuine milestone — the first checkpoint in 12+
+      generations across both chains with zero corners in its top-5.
+      gen1-6 shipped to the app (`RayZeroDifficulty.GEN1`-`GEN6`, gen6
+      currently strongest); **gen7 was held back**, pending investigation
+      of two things flagged at the time: the accelerating tengen
+      concentration (30%→71%) read as a possible policy collapse, and
+      gen7's eval-vs-baseline Stage 5 output being bit-identical to
+      gen6's own ("Candidate rating: 1726.1 vs current tier: 1273.9" —
+      both runs, to the decimal).
+
+      **Both resolved 2026-09-22, neither is a real blocker:**
+      1. *Tengen concentration* — reconsidered against actual 9x9 opening
+         theory (tengen is well-regarded as one of the strongest 9x9
+         opens, unlike 19x19 where corner fuseki dominates), and against
+         this chain's own internal evidence: concentration rose *while*
+         vs-parent Elo also kept climbing at every step (gen5→gen6→gen7),
+         the opposite signature from this project's real past collapses
+         (which showed concentration rising *while* game-outcome strength
+         fell). Downgraded from "red flag" to "plausibly the net learning
+         real opening theory, still worth a sanity check under deeper
+         search before fully trusting it."
+      2. *Duplicate eval-vs-baseline numbers* — reproduced directly:
+         `eval/match.py`'s `play_match` run with gen7's exact real config
+         (candidate `bootstrap_option3_gen7_candidate.pt`) against the
+         baseline came back **40/40 wins, a clean sweep**. `eval/elo.py`'s
+         `update_ratings` takes only the win/loss sequence (`MatchResult.
+         score_a`), never which checkpoint actually played — two clean
+         40-0 sweeps from the same starting ratings are **mathematically
+         guaranteed** to produce identical numbers, regardless of margin
+         or which candidate. Confirmed benign, not a bug in
+         `eval/promote.py`; no fix needed. (Also means: don't be alarmed
+         by future identical-looking vs-baseline numbers specifically
+         when it's a clean sweep — the vs-parent match, which has never
+         been a clean sweep so far, is the meaningful signal for real
+         promotion decisions.)
+
+      **Net effect: gen7 is no longer technically blocked from shipping,
+      and gen8 is no longer technically blocked from launching.** Neither
+      has happened yet — both are pending a product decision (from the
+      igo-app side) on whether to actually ship gen7 as a 7th difficulty
+      tier and continue the chain, not further investigation. gen7's
+      configs/run script exist locally but aren't committed yet.
+
+      **Update 2026-09-22 — gen8 run and promoted, gen9 parked at an
+      escalated game count:** launched immediately after the above
+      investigation, same 300-game recipe. Promoted cleanly vs. gen7
+      (+68.8 Elo, 1534.4 vs 1465.6, a genuine non-sweep result) and vs.
+      baseline (1726.1 vs 1273.9 — the same clean-sweep numbers as gen6/
+      gen7, now expected, not a fresh red flag). `bootstrap_option3_gen8_candidate.pt`
+      is the new best checkpoint.
+
+      **Two continuing trends worth tracking, neither blocking yet:**
+      opening concentration keeps climbing (30.26% gen6 → 71.12% gen7 →
+      **89.13% gen8** on tengen), and the vs-parent Elo gain keeps
+      shrinking (+305.4 gen6 → +116.6 gen7 → **+68.8 gen8**) — still
+      comfortably above the 50-Elo promotion bar, but the same
+      shrinking-gap shape that preceded this project's real plateaus
+      before (the original chain's gen4, and this restart's own 100-game
+      gen4 attempt).
+
+      **User decision: park gen9 for the next session, and escalate
+      `num_games` 300→500 when it resumes** — the same lever that fixed
+      real plateaus twice before (original chain's gen5/gen9, this
+      restart's gen4 100→300 retry), applied preemptively this time
+      given the shrinking-Elo-gain trend rather than waiting for an
+      outright failed promotion. Gen9's config set doesn't exist yet;
+      when created it should mirror gen8's own with `num_games: 500`,
+      `checkpoint_path`/`init_from_checkpoint` = gen8's candidate, and the
+      data-source mix tapered one more generation (gen6 ages out, gen7
+      takes its old 0.10 slot, gen8 takes gen7's old 0.15 slot, gen9-new
+      dominant at 0.70).
+
+      Shipping gen7+gen8 to `igo-app` as new difficulty tiers (the plan
+      discussed before gen8 launched) also hasn't happened yet — still
+      just pending the user's go-ahead. Nothing from gen7 or gen8 is
+      committed to git here yet.
+
+      **Update 2026-09-23 — gen9 launched at 500 games and PROMOTED
+      decisively, reversing the shrinking trend:** self-play (500 games,
+      0 short, 0 pass-biased) took ~8h23m. Eval vs. gen8 (parent, 80
+      games): 1641.2 vs 1358.8 → **+282.4 Elo, PROMOTE** — a sharp
+      reversal of gen6→gen7→gen8's shrinking pattern (+305.4 → +116.6 →
+      +68.8 → **+282.4**), confirming the `num_games` escalation lever
+      worked again, same as the original chain's gen5/gen9 and this
+      restart's own gen4 100→300 retry. Eval vs. baseline (40 games):
+      1721.7 vs 1278.3 → PROMOTE, notably *not* the same bit-identical
+      clean-sweep numbers gen6/gen7/gen8 all shared — a genuinely
+      distinct match result this time. Opening spot-check: tengen
+      concentration kept climbing but decelerated sharply — 89.13%
+      (gen8) → **91.75% (gen9)**, a ~2.6pt step vs. gen7→gen8's ~18pt
+      jump. `bootstrap_option3_gen9_candidate.pt` is the new best
+      checkpoint.
+
+      **gen7, gen8, and gen9 all shipped to `igo-app` as difficulty
+      tiers 2026-09-23** (`igo-app` commit `92e61c4`) — exported to
+      `.tflite`, added to `RayZeroDifficulty`, "AI Hint" repointed to
+      gen9. Not yet re-verified on-device (no emulator/device was
+      connected that session). gen10 or holding here is undecided —
+      pick up next session; if gen10 happens, mirror gen9's own config
+      pattern (already the deep-chain taper shape, see below) and watch
+      whether the tengen-concentration deceleration continues.
 - [ ] **Round-robin tournament for real, cross-generation Elo reference
       points (parked 2026-09-10, blocked on "truly complete" generation
       training).** `eval/promote.py` only ever plays a candidate against

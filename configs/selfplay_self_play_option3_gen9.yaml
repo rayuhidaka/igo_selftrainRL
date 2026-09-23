@@ -1,0 +1,24 @@
+# Option 3, generation 9. Parent is gen8 (promoted +68.8 Elo vs gen7). Stepping
+# num_games 300->500 preemptively: vs-parent Elo gain has been shrinking each
+# generation (gen6 +305.4 -> gen7 +116.6 -> gen8 +68.8), the same shrinking-gap
+# shape that preceded this project's two real plateaus before (original chain's
+# gen4, this restart's own 100-game gen4 attempt) -- user decision 2026-09-22 to
+# escalate the games count before that happens again, rather than waiting for an
+# outright failed promotion.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen8_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260923
+
+num_games: 500
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen9.npz
