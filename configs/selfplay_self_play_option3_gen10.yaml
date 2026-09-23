@@ -1,0 +1,21 @@
+# Option 3, generation 10. Parent is gen9 (promoted +282.4 Elo vs gen8 after the
+# 300->500 num_games escalation broke the shrinking vs-parent trend). Keeping
+# gen9's recipe unchanged, including num_games: 500 -- no reason to change a lever
+# that just worked.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen9_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260924
+
+num_games: 500
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen10.npz
