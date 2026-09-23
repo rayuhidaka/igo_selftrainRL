@@ -1,0 +1,34 @@
+# Round-robin across every Option 3 checkpoint (gen1-gen9) plus the pristine baseline they
+# all descend from, to put every generation shipped to igo-app on one shared Elo scale --
+# unlike eval/promote.py's per-match ratings, which reset to 1500 every match and aren't
+# comparable to each other. See docs/ROADMAP.md's "round-robin tournament" item.
+#
+# 45 pairings x 40 games = 1800 games. Eval games are cheap (num_simulations=50, unlike
+# self-play's 400) -- gen8's own 80-game eval vs gen7 took ~20min single-process, so at
+# 4 parallel workers this should land around ~2h wall-clock.
+
+board_size: 9
+komi: 7.5
+num_games: 40
+num_simulations: 50
+temperature: 1.0
+temperature_drop_move: 16
+seed: 0
+
+anchor: baseline
+
+checkpoints:
+  baseline: checkpoints/bootstrap_batch2_residual_v2.pt
+  gen1: checkpoints/bootstrap_option3_gen1_candidate.pt
+  gen2: checkpoints/bootstrap_option3_gen2_candidate.pt
+  gen3: checkpoints/bootstrap_option3_gen3_candidate.pt
+  gen4: checkpoints/bootstrap_option3_gen4_300games_candidate.pt
+  gen5: checkpoints/bootstrap_option3_gen5_candidate.pt
+  gen6: checkpoints/bootstrap_option3_gen6_candidate.pt
+  gen7: checkpoints/bootstrap_option3_gen7_candidate.pt
+  gen8: checkpoints/bootstrap_option3_gen8_candidate.pt
+  gen9: checkpoints/bootstrap_option3_gen9_candidate.pt
+
+out_dir: eval
+raw_out_name: round_robin_results.json
+elo_out_name: checkpoints_elo.json
