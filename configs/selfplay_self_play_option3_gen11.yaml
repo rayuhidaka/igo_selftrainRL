@@ -1,0 +1,21 @@
+# Option 3, generation 11. Parent is gen10 (promoted +111.6 Elo vs gen9 at the same
+# 500-game recipe). Keeping that recipe unchanged; the vs-parent gain is shrinking
+# again (+282.4 gen9 -> +111.6 gen10), so if gen11 lands under ~+70 the next lever
+# gets decided before gen12 rather than repeating this recipe.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen10_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260925
+
+num_games: 500
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen11.npz
