@@ -877,6 +877,23 @@ scheduling, session length) is still to be decided — revisit when Phase
       pick up next session; if gen10 happens, mirror gen9's own config
       pattern (already the deep-chain taper shape, see below) and watch
       whether the tengen-concentration deceleration continues.
+
+      **Update 2026-09-24 — gen10 PROMOTED at the same 500-game recipe,
+      shipped.** Configs mirror gen9's exactly (`run_option3_gen10.sh`,
+      seed 20260924, train seed 10, mix batch2 0.05 / gen8 0.10 / gen9
+      0.15 / gen10-new 0.70 — gen7 aged out). Self-play (500 games, 53070
+      examples, 0 short, 0 pass-biased) + the rest took ~8h50m
+      (08:01-16:51 JST). Eval vs. gen9 (80 games): 1555.8 vs 1444.2 →
+      **+111.6 Elo, PROMOTE**; vs. baseline (40 games): 1709.5 vs 1290.5
+      → PROMOTE. Opening spot-check: tengen concentration **eased for the
+      first time** — 91.75% (gen9) → 89.54% (gen10) — ending the
+      three-generation climb this entry was watching. The vs-parent gain
+      is shrinking again even at 500 games (+282.4 → +111.6); if gen11
+      falls under ~+70, pick the next lever before chaining further.
+      Exported (`export/ray_zero_option3_gen10.tflite`, max diff vs.
+      PyTorch ~2e-6), added to the round-robin (below), and shipped to
+      `igo-app` as `RayZeroDifficulty.GEN10` with "AI Hint" repointed to
+      it — verified on-device (Pixel_7 AVD).
 - [x] **Round-robin tournament for real, cross-generation Elo reference
       points — done 2026-09-23.** `eval/round_robin.py` (new): all 9
       Option 3 generations + the pristine baseline played every other
@@ -894,6 +911,15 @@ scheduling, session length) is still to be decided — revisit when Phase
       field), not a fitting artifact. Consumed by `igo-app`'s new
       in-app Elo graph (`igo-app/docs/ROADMAP.md`'s mirrored entry) —
       `RayZeroDifficulty.elo` now carries these exact numbers.
+
+      **Update 2026-09-24 — gen10 added** via the new `--reuse-existing`
+      flag (`missing_pairings`, tested in `tests/test_round_robin.py`):
+      keeps every pairing already in `round_robin_results.json` and only
+      plays the missing ones, so adding gen10 cost 10 pairings (~50min),
+      not a full 55-pairing replay. Refit: gen10 2404.0, gen9 2301.1;
+      every other tier moved by at most ~20 Elo, and gen4 (1924.2) still
+      rates above gen5 (1894.9). gen10 won every pairing (30-10 vs. each
+      of gen6/gen8/gen9, 40-0 vs. baseline).
 
       Parallelized across pairings (not per-game, which is inherently
       sequential) via `ProcessPoolExecutor` rather than

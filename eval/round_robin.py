@@ -14,6 +14,7 @@ so parallel worker processes never contend over one GPU the way parallel *traini
 
 Usage:
     python -m eval.round_robin --config configs/eval_round_robin_option3.yaml
+    python -m eval.round_robin --config ... --reuse-existing   # only play pairings not already saved
 """
 
 from __future__ import annotations
@@ -70,6 +71,19 @@ def _play_pairing(
         seed=seed,
     )
     return name_a, name_b, [r.score_a for r in results]
+
+
+def missing_pairings(
+    pairings: list[tuple[str, str]], saved_scores: list[tuple[str, str, list[float]]]
+) -> list[tuple[int, str, str]]:
+    """Returns each of `pairings` (with its index in that list, which seeds its games) that has
+    no result in `saved_scores` yet, in either orientation -- for `--reuse-existing`, so adding
+    one new checkpoint to a finished round-robin only plays that checkpoint's own pairings
+    rather than replaying the whole field. Every existing pairing is already a fixed 40-game
+    sample either way, so replaying it would only swap one sample for another.
+    """
+    played = {frozenset((a, b)) for a, b, _ in saved_scores}
+    return [(i, a, b) for i, (a, b) in enumerate(pairings) if frozenset((a, b)) not in played]
 
 
 def fit_elo_naive_sequential(
@@ -189,6 +203,12 @@ def main() -> None:
         help="Skip playing any games; re-fit ratings from an existing raw_out_name file (see "
         "fit_elo_bradley_terry's docstring for why you might want to re-fit without new games).",
     )
+    parser.add_argument(
+        "--reuse-existing",
+        action="store_true",
+        help="Keep every pairing already saved in raw_out_name and only play the ones missing from "
+        "it (e.g. a newly added checkpoint's pairings), then re-fit ratings over the combined set.",
+    )
     args = parser.parse_args()
 
     config = yaml.safe_load(args.config.read_text())
@@ -205,11 +225,18 @@ def main() -> None:
         print(f"Re-fitting from {len(pairing_scores)} pairings already saved at {raw_out} (no games played).")
     else:
         base_seed = config.get("seed", 0)
+        pairing_scores = []
+        if args.reuse_existing and raw_out.exists():
+            saved = [(entry["a"], entry["b"], entry["scores_a"]) for entry in json.loads(raw_out.read_text())]
+            # Drop any saved pairing involving a checkpoint no longer in the config, so the fit
+            # below only ever sees names it was asked to rate.
+            pairing_scores = [(a, b, scores) for a, b, scores in saved if a in checkpoints and b in checkpoints]
+        to_play = missing_pairings(pairings, pairing_scores)
         print(
-            f"Launching {len(pairings)} pairings ({config['num_games']} games each) across {args.workers} workers..."
+            f"Launching {len(to_play)} pairings ({config['num_games']} games each) across {args.workers} workers"
+            f" ({len(pairing_scores)} reused from {raw_out})..."
         )
 
-        pairing_scores = []
         with ProcessPoolExecutor(max_workers=args.workers) as pool:
             futures = {
                 pool.submit(
@@ -226,7 +253,7 @@ def main() -> None:
                     config.get("temperature_drop_move", 16),
                     base_seed + i,
                 ): (name_a, name_b)
-                for i, (name_a, name_b) in enumerate(pairings)
+                for i, name_a, name_b in to_play
             }
             completed = 0
             for future in as_completed(futures):
@@ -237,7 +264,7 @@ def main() -> None:
                 wins_b = sum(1 for s in scores if s == 0.0)
                 draws = len(scores) - wins_a - wins_b
                 print(
-                    f"[{completed}/{len(pairings)}] {name_a} vs {name_b}: {wins_a}-{wins_b}-{draws} (A-B-draw)",
+                    f"[{completed}/{len(to_play)}] {name_a} vs {name_b}: {wins_a}-{wins_b}-{draws} (A-B-draw)",
                     flush=True,
                 )
 

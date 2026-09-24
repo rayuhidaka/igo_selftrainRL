@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import unittest
 
-from eval.round_robin import fit_elo_bradley_terry
+from eval.round_robin import fit_elo_bradley_terry, missing_pairings
 
 
 class FitEloBradleyTerryTest(unittest.TestCase):
@@ -53,3 +53,17 @@ class FitEloBradleyTerryTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MissingPairingsTest(unittest.TestCase):
+    def test_only_unplayed_pairings_are_returned_with_their_original_index(self) -> None:
+        pairings = [("a", "b"), ("a", "c"), ("b", "c")]
+        saved = [("a", "b", [1.0]), ("b", "c", [0.0])]
+        self.assertEqual(missing_pairings(pairings, saved), [(1, "a", "c")])
+
+    def test_a_pairing_saved_in_the_opposite_orientation_counts_as_played(self) -> None:
+        self.assertEqual(missing_pairings([("a", "b")], [("b", "a", [1.0])]), [])
+
+    def test_nothing_saved_means_every_pairing_is_played(self) -> None:
+        pairings = [("a", "b"), ("a", "c")]
+        self.assertEqual(missing_pairings(pairings, []), [(0, "a", "b"), (1, "a", "c")])
