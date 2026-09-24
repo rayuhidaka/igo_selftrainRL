@@ -894,6 +894,23 @@ scheduling, session length) is still to be decided — revisit when Phase
       PyTorch ~2e-6), added to the round-robin (below), and shipped to
       `igo-app` as `RayZeroDifficulty.GEN10` with "AI Hint" repointed to
       it — verified on-device (Pixel_7 AVD).
+
+      **Update 2026-09-25 — gen11 PROMOTED at the same recipe, shipped.**
+      Configs mirror gen10's (`run_option3_gen11.sh`, seed 20260925,
+      train seed 11, mix batch2 0.05 / gen9 0.10 / gen10 0.15 /
+      gen11-new 0.70). ~8h36m (19:13-03:49 JST). Self-play 500 games,
+      51317 examples, 0 short, 0 pass-biased. Eval vs. gen10 (80 games):
+      1583.8 vs 1416.2 → **+167.6, PROMOTE**; vs. baseline: 1698.5 vs
+      1301.5 → PROMOTE. Tengen 89.54% → 91.39%, flat at ~90% since gen8.
+      **But the round-robin disagrees with the promotion match:** gen11
+      rates 2384.7 vs gen10's 2373.0 on the shared scale (~+12), their
+      direct round-robin pairing 23-17. Two samples of the same pairing
+      (80 games: ~72% gen11; 40 games: 57.5%) differ more than noise
+      alone comfortably explains, and the round-robin also counts every
+      other opponent — treat the chain as possibly flattening. Shipped
+      to `igo-app` as `GEN11` (on-device verified). gen12 launched at
+      the same recipe per the user's instruction; judge it by its
+      round-robin rating vs. gen11, not only its promotion match.
 - [x] **Round-robin tournament for real, cross-generation Elo reference
       points — done 2026-09-23.** `eval/round_robin.py` (new): all 9
       Option 3 generations + the pristine baseline played every other
@@ -920,6 +937,11 @@ scheduling, session length) is still to be decided — revisit when Phase
       every other tier moved by at most ~20 Elo, and gen4 (1924.2) still
       rates above gen5 (1894.9). gen10 won every pairing (30-10 vs. each
       of gen6/gen8/gen9, 40-0 vs. baseline).
+
+      **Update 2026-09-25 — gen11 added** the same way (11 pairings,
+      ~1h). Refit: gen11 2384.7, gen10 2373.0, and every older tier
+      shifted down ~20-30 (gen9 2272.3); gen4 (1920.5) still above gen5
+      (1899.8).
 
       Parallelized across pairings (not per-game, which is inherently
       sequential) via `ProcessPoolExecutor` rather than
