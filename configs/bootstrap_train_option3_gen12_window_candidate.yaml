@@ -1,0 +1,46 @@
+# Option 3, generation 12, WIDER-DATA-WINDOW variant. Same parent (gen11), seed, 60s cap, and
+# the same 1000 gen12 self-play games as bootstrap_train_option3_gen12_1000games_candidate.yaml,
+# but the mix spreads weight over the six previous generations' self-play (gen6-gen11, 0.075
+# each) instead of only the last two (gen10 0.10 / gen11 0.15), with gen12-new cut from 0.70
+# to 0.50. The 1000-game gen12 beat gen11 head-to-head yet rated well below it on the
+# round-robin -- it got weaker against older play styles -- so this keeps those styles'
+# positions in training, the same idea as AlphaZero's replay window over recent generations.
+# Judged by eval/gate.py, not just the parent match.
+
+board_size: 9
+seed: 12
+init_from_checkpoint: checkpoints/bootstrap_option3_gen11_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_option3_gen12_window_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_option3_gen6.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen7.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen8.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen9.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen10.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen11.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen12.npz
+    weight: 0.25
+  - path: selfplay_games/self_play_option3_gen12_extra500.npz
+    weight: 0.25
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_option3_gen12_window_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60
