@@ -1,0 +1,38 @@
+# Option 3, generation 12 fine-tune, LONGER-TRAINING variant (2epoch). Identical to
+# bootstrap_train_option3_gen12_candidate.yaml (same parent, data, seed) except it trains
+# 2 full epoch(s) instead of stopping at max_train_seconds: 60 -- which had cut every
+# Option 3 generation off at ~53% of one epoch (step ~3170 of 5954). Tests whether that
+# truncation is why gen12 missed promotion (+42.6 vs gen11, gate 50).
+#
+# Mix ratios shift by one generation from gen11's own recipe (batch2 0.05 /
+# gen9 0.10 / gen10 0.15 / gen11-new 0.70): gen9 is dropped, gen10 takes its old 0.10
+# slot, gen11 takes gen10's old 0.15 slot, gen12-new gets the same 0.70 dominant share
+# every generation in this restart has used.
+
+board_size: 9
+seed: 12
+init_from_checkpoint: checkpoints/bootstrap_option3_gen11_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_option3_gen12_2epoch_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_option3_gen10.npz
+    weight: 0.10
+  - path: selfplay_games/self_play_option3_gen11.npz
+    weight: 0.15
+  - path: selfplay_games/self_play_option3_gen12.npz
+    weight: 0.70
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 2
+
+log_dir: runs
+run_name: bootstrap_option3_gen12_2epoch_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: null

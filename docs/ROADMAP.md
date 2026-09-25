@@ -911,6 +911,23 @@ scheduling, session length) is still to be decided — revisit when Phase
       to `igo-app` as `GEN11` (on-device verified). gen12 launched at
       the same recipe per the user's instruction; judge it by its
       round-robin rating vs. gen11, not only its promotion match.
+
+      **Update 2026-09-25 — gen12 NOT PROMOTED, and longer training
+      doesn't fix it.** gen12 self-play (500 games, 51974 examples, 0
+      short/0 pass-biased) finished 15:17 JST. vs gen11 (80 games):
+      1521.3 vs 1478.7 → **+42.6, Do not promote** (gate 50); vs
+      baseline +286.8 (gen11's was +397). Tengen dropped 91.39% →
+      60.58%. Found that every Option 3 fine-tune had stopped at
+      `max_train_seconds: 60` — only ~53% of one epoch (step 3172 of
+      5954). Experiment (`run_option3_gen12_longtrain.sh`, same parent
+      and data, new checkpoint names): **1 full epoch → +28.2, 2 epochs
+      → −7.8**, neither promoted. More steps on the same data made it no
+      better and trended worse (all within 80-game noise, roughly ±75
+      Elo), so training length isn't the bottleneck — the self-play data
+      is. Tengen 53%/57% for the variants, so the opening shift comes from
+      gen12's self-play, not training length. gen11 stays the best
+      checkpoint. Next lever pending the user's decision (more games or
+      more simulations per move).
 - [x] **Round-robin tournament for real, cross-generation Elo reference
       points — done 2026-09-23.** `eval/round_robin.py` (new): all 9
       Option 3 generations + the pristine baseline played every other
