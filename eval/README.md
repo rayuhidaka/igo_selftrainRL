@@ -12,6 +12,13 @@ design and `../docs/ROADMAP.md`'s Phase 3. Fully implemented end to end:
   ports of `igo-app`'s Kotlin implementations.
 - `promote.py` — orchestrates the two: play a candidate against the
   current tier, update ratings, decide whether to promote.
+- `round_robin.py` — every checkpoint vs. every other, fit to one shared
+  Elo scale (Bradley-Terry).
+- `gate.py` — the second half of a promotion decision: after `promote.py`
+  confirms a candidate beats its parent, passes it only if it rates at least
+  its parent on a round-robin that includes it. Catches a candidate that
+  beats its parent by getting weaker against everything older (see its
+  module docstring for the gen12 case that motivated it).
 
 Tested at two levels: unit tests (`../tests/test_elo.py`,
 `../tests/test_match.py`) and a real CLI run

@@ -15,6 +15,8 @@ so parallel worker processes never contend over one GPU the way parallel *traini
 Usage:
     python -m eval.round_robin --config configs/eval_round_robin_option3.yaml
     python -m eval.round_robin --config ... --reuse-existing   # only play pairings not already saved
+    python -m eval.round_robin --config ... --reuse-existing --add-checkpoint gen13=<path>.pt \\
+        --out-prefix gate_gen13_   # a promotion candidate's field check; see eval/gate.py
 """
 
 from __future__ import annotations
@@ -209,15 +211,42 @@ def main() -> None:
         help="Keep every pairing already saved in raw_out_name and only play the ones missing from "
         "it (e.g. a newly added checkpoint's pairings), then re-fit ratings over the combined set.",
     )
+    parser.add_argument(
+        "--add-checkpoint",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help="Add a checkpoint to the field for this run only, without editing the config -- e.g. a "
+        "promotion candidate being checked by eval/gate.py. Repeatable.",
+    )
+    parser.add_argument(
+        "--out-prefix",
+        default=None,
+        help="Write the raw results and fitted ratings to <prefix>round_robin_results.json / "
+        "<prefix>checkpoints_elo.json instead of the config's shared files, while still reading "
+        "the shared raw results for --reuse-existing -- so a candidate that fails its gate never "
+        "lands in the ratings igo-app ships.",
+    )
     args = parser.parse_args()
 
     config = yaml.safe_load(args.config.read_text())
-    checkpoints: dict[str, str] = config["checkpoints"]
+    checkpoints: dict[str, str] = dict(config["checkpoints"])
+    for spec in args.add_checkpoint:
+        name, sep, path = spec.partition("=")
+        if not sep or not name or not path:
+            parser.error(f"--add-checkpoint expects NAME=PATH, got {spec!r}")
+        checkpoints[name] = path
     names = list(checkpoints.keys())
     pairings = list(itertools.combinations(names, 2))
 
     out_dir = Path(config.get("out_dir", "eval"))
-    raw_out = out_dir / config.get("raw_out_name", "round_robin_results.json")
+    raw_name = config.get("raw_out_name", "round_robin_results.json")
+    elo_name = config.get("elo_out_name", "checkpoints_elo.json")
+    # --reuse-existing always reads the shared results; --out-prefix only redirects the writes.
+    raw_in = out_dir / raw_name
+    prefix = args.out_prefix or ""
+    raw_out = out_dir / f"{prefix}{raw_name}"
+    elo_out = out_dir / f"{prefix}{elo_name}"
 
     if args.refit_only:
         raw_data = json.loads(raw_out.read_text())
@@ -226,15 +255,15 @@ def main() -> None:
     else:
         base_seed = config.get("seed", 0)
         pairing_scores = []
-        if args.reuse_existing and raw_out.exists():
-            saved = [(entry["a"], entry["b"], entry["scores_a"]) for entry in json.loads(raw_out.read_text())]
+        if args.reuse_existing and raw_in.exists():
+            saved = [(entry["a"], entry["b"], entry["scores_a"]) for entry in json.loads(raw_in.read_text())]
             # Drop any saved pairing involving a checkpoint no longer in the config, so the fit
             # below only ever sees names it was asked to rate.
             pairing_scores = [(a, b, scores) for a, b, scores in saved if a in checkpoints and b in checkpoints]
         to_play = missing_pairings(pairings, pairing_scores)
         print(
             f"Launching {len(to_play)} pairings ({config['num_games']} games each) across {args.workers} workers"
-            f" ({len(pairing_scores)} reused from {raw_out})..."
+            f" ({len(pairing_scores)} reused from {raw_in})..."
         )
 
         with ProcessPoolExecutor(max_workers=args.workers) as pool:
@@ -278,8 +307,7 @@ def main() -> None:
     for name in sorted(ratings, key=lambda n: ratings[n]):
         print(f"{name}: {ratings[name]:.1f}")
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    elo_out = out_dir / config.get("elo_out_name", "checkpoints_elo.json")
+    elo_out.parent.mkdir(parents=True, exist_ok=True)
     elo_out.write_text(json.dumps(ratings, indent=2))
 
     print(f"Fitted ratings written to {elo_out} (raw results at {raw_out}).")
