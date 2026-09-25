@@ -1,11 +1,11 @@
-# Round-robin across every Option 3 checkpoint (gen1-gen11) plus the pristine baseline they
+# Round-robin across every Option 3 checkpoint (gen1-gen12) plus the pristine baseline they
 # all descend from, to put every generation shipped to igo-app on one shared Elo scale --
 # unlike eval/promote.py's per-match ratings, which reset to 1500 every match and aren't
 # comparable to each other. See docs/ROADMAP.md's "round-robin tournament" item.
 #
-# 66 pairings x 40 games = 2640 games. gen10 (2026-09-24) and gen11 (2026-09-25) were each
-# added via --reuse-existing, playing only the new checkpoint's own pairings (10, then 11)
-# rather than replaying the whole field.
+# 78 pairings x 40 games = 3120 games. gen10 (2026-09-24), gen11 (2026-09-25) and gen12
+# (2026-09-26) were each added via --reuse-existing, playing only the new checkpoint's own
+# pairings (10, 11, then 12) rather than replaying the whole field.
 # Eval games are cheap (num_simulations=50, unlike self-play's 400) -- gen8's own 80-game
 # eval vs gen7 took ~20min single-process, so the full field at 4 parallel workers would land
 # around ~2.5h wall-clock; one new checkpoint's pairings alone, ~1h.
@@ -33,6 +33,7 @@ checkpoints:
   gen9: checkpoints/bootstrap_option3_gen9_candidate.pt
   gen10: checkpoints/bootstrap_option3_gen10_candidate.pt
   gen11: checkpoints/bootstrap_option3_gen11_candidate.pt
+  gen12: checkpoints/bootstrap_option3_gen12_1000games_candidate.pt  # the 1000-game retry, not the 500-game run
 
 out_dir: eval
 raw_out_name: round_robin_results.json

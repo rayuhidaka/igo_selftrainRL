@@ -928,6 +928,24 @@ scheduling, session length) is still to be decided — revisit when Phase
       gen12's self-play, not training length. gen11 stays the best
       checkpoint. Next lever pending the user's decision (more games or
       more simulations per move).
+
+      **Update 2026-09-26 — gen12 retry at 1000 games: promoted vs.
+      gen11, but weaker on the shared scale. NOT shipped.**
+      `run_option3_gen12_1000games.sh`: 500 more games from gen11 (seed
+      20260927, 52851 examples) trained alongside the original 500 at
+      0.35 + 0.35. vs gen11 (80 games): +61.6, **PROMOTE**; vs baseline
+      +340.2. Tengen 55.52%. **Round-robin (12 new pairings): gen12
+      2217.6 vs gen11 2303.3 and gen10 2289.3** — about gen9's level
+      (2213.5), despite beating gen11 24-16 and gen10 26-14 directly.
+      Against every older checkpoint it did clearly worse than gen11
+      (vs gen6 25-15 where gen11 went 38-2; vs gen7 23-17 vs 31-9;
+      vs baseline 35-5 vs 39-1). Classic self-play non-transitivity:
+      the candidate learns to beat its recent parents specifically, not
+      to play better generally, and the parent-only promotion gate can't
+      see that by construction (same blind spot as the original chain's
+      weak-opening item). gen11 stays the best checkpoint and the
+      shipped one. gen12 kept in the round-robin as data (name `gen12` →
+      the 1000games checkpoint). Next step pending the user.
 - [x] **Round-robin tournament for real, cross-generation Elo reference
       points — done 2026-09-23.** `eval/round_robin.py` (new): all 9
       Option 3 generations + the pristine baseline played every other
