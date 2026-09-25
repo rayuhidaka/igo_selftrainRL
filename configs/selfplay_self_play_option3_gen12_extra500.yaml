@@ -1,0 +1,23 @@
+# Option 3, generation 12 retry at 1000 games. gen12 at 500 games missed promotion vs gen11
+# (+42.6, gate 50), and training longer on that same data didn't help (1 epoch +28.2,
+# 2 epochs -7.8), so the self-play data is the bottleneck. This plays 500 MORE games from the
+# same parent (gen11) with the same settings and a different seed; training then uses them
+# alongside the original gen12 500 (selfplay_games/self_play_option3_gen12.npz) -- 1000 games
+# total, same distribution as 1000 fresh ones, in half the wall-clock time.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen11_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260927
+
+num_games: 500
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen12_extra500.npz
