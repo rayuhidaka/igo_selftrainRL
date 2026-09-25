@@ -946,6 +946,24 @@ scheduling, session length) is still to be decided — revisit when Phase
       weak-opening item). gen11 stays the best checkpoint and the
       shipped one. gen12 kept in the round-robin as data (name `gen12` →
       the 1000games checkpoint). Next step pending the user.
+
+      **Update 2026-09-26 — field gate added; wider data window helps
+      but doesn't clear it.** New `eval/gate.py`: a candidate must also
+      rate >= its parent on a round-robin that includes it
+      (`round_robin.py --add-checkpoint ... --out-prefix`, so a
+      rejected candidate never touches the shared ratings). Retroactively:
+      gen11 passes, the 1000-game gen12 fails. First real use,
+      `run_option3_gen12_window.sh`: gen12 retrained from gen11 on the
+      same 1000 games with gen6-gen11's self-play at 0.075 each (0.45
+      total, was gen10/gen11 at 0.25). Parent match vs gen11: **+77.0,
+      PROMOTE**. Tengen 70.79%. Field gate: **gen12w 2266.7 vs gen11
+      2287.2 → FAIL** (−20.5, inside round-robin noise but not above
+      the parent). Big improvement over the 1000-game gen12 (2216.3 in
+      the same fit): vs gen6 33-7 (was 25-15), vs gen7 37-3 (was 23-17),
+      vs gen10 28-12 (gen11 itself 23-17) — but lost to gen11 17-23 and
+      to the 1000-game gen12 26-14 directly. Not shipped; gen11 stays
+      best. Results in `eval/gate_gen12w_*.json`. Next step pending the
+      user.
 - [x] **Round-robin tournament for real, cross-generation Elo reference
       points — done 2026-09-23.** `eval/round_robin.py` (new): all 9
       Option 3 generations + the pristine baseline played every other
