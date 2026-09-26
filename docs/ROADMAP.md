@@ -964,6 +964,21 @@ scheduling, session length) is still to be decided — revisit when Phase
       to the 1000-game gen12 26-14 directly. Not shipped; gen11 stays
       best. Results in `eval/gate_gen12w_*.json`. Next step pending the
       user.
+
+      **Update 2026-09-27 — 800 simulations per move: fails the gate too.**
+      `run_option3_gen12_800sims.sh`: 500 games from gen11 at 800 sims
+      (seed 20260928, 52305 examples, 0 short/0 pass-biased; self-play
+      ~16h07m, 09:18-01:25 JST), trained with the wider window (new
+      800-sim games at 0.50). Parent match vs gen11: 1533.1 vs 1466.9 →
+      **+66.2, PROMOTE**. Tengen 64.10%. Field gate (13 pairings):
+      **gen12s 2241.4 vs gen11 2269.5 → FAIL** — lost to gen11 19-21 and
+      to the 1000-game gen12 18-22; no better than the wider window alone
+      (which was −20.5). All four levers tried for gen12 — more games,
+      longer training, a wider data window, deeper search — produce a
+      candidate that beats gen11 head-to-head but not overall. gen11 looks
+      like the ceiling of this setup (6 blocks / 96 channels). Results in
+      `eval/gate_gen12s_*.json`. Next step pending the user: hold at
+      gen11, or a bigger lever (e.g. a larger net).
 - [x] **Round-robin tournament for real, cross-generation Elo reference
       points — done 2026-09-23.** `eval/round_robin.py` (new): all 9
       Option 3 generations + the pristine baseline played every other
