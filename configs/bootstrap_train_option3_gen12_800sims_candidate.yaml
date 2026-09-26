@@ -1,0 +1,43 @@
+# Option 3, generation 12, STRONGER-SEARCH variant. Same wider data window as
+# bootstrap_train_option3_gen12_window_candidate.yaml (gen6-gen11 at 0.075 each, batch2 0.05),
+# but the 0.50 new-generation share is the 500 gen12 games played at 800 simulations per move
+# (selfplay_self_play_option3_gen12_800sims.yaml) instead of the 1000 400-sim games -- so the
+# only change from the window run is self-play search depth. Judged by eval/gate.py.
+# Same parent (gen11), seed, and 60s cap as every gen12 attempt; the window itself exists
+# because the 1000-game gen12 got weaker against older generations (see docs/ROADMAP.md).
+
+board_size: 9
+seed: 12
+init_from_checkpoint: checkpoints/bootstrap_option3_gen11_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_option3_gen12_800sims_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_option3_gen6.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen7.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen8.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen9.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen10.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen11.npz
+    weight: 0.075
+  - path: selfplay_games/self_play_option3_gen12_800sims.npz
+    weight: 0.50
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_option3_gen12_800sims_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

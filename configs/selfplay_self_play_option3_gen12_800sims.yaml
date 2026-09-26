@@ -1,0 +1,23 @@
+# Option 3, generation 12, STRONGER-SEARCH variant: 500 games from gen11 at 800 MCTS
+# simulations per move instead of 400, everything else unchanged. Three 400-sim gen12
+# attempts beat gen11 head-to-head but never rated above it on the round-robin (500 games,
+# 1000 games, and 1000 games with a wider data window -- see docs/ROADMAP.md). The wider
+# window fixed the "weaker against older generations" part; this tests whether better
+# policy/value targets from deeper search are what's still missing. ~2x slower per game.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen11_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20260928
+
+num_games: 500
+max_moves: 200
+num_simulations: 800
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/self_play_option3_gen12_800sims.npz
