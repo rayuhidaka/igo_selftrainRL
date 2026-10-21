@@ -9,6 +9,7 @@ Run with: python -m unittest discover
 
 from __future__ import annotations
 
+import random
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,7 +17,9 @@ from pathlib import Path
 import torch
 
 from bootstrap.model import RayZeroNet
-from eval.match import play_match
+from engine.move import Pass, Play
+from engine.point import Point
+from eval.match import PlayerStyle, play_match, sample_placement
 
 _BOARD_SIZE = 5
 _NUM_SIMULATIONS = 4
@@ -112,6 +115,41 @@ class PlayMatchTest(unittest.TestCase):
                 return [r.score_a for r in results]
 
             self.assertEqual(play(), play())
+
+    def test_a_styled_side_plays_full_games(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint = Path(tmp) / "same.pt"
+            _save_untrained_checkpoint(checkpoint, seed=3)
+
+            results = play_match(
+                checkpoint,
+                checkpoint,
+                board_size=_BOARD_SIZE,
+                num_games=4,
+                num_simulations=_NUM_SIMULATIONS,
+                seed=7,
+                style_a=PlayerStyle(num_simulations=2, temperature=1.0),
+            )
+
+            self.assertEqual(4, len(results))
+
+
+class SamplePlacementTest(unittest.TestCase):
+    def test_passes_when_the_most_visited_move_is_a_pass(self) -> None:
+        visits = {Pass(): 10, Play(Point(0, 0)): 3}
+        self.assertEqual(Pass(), sample_placement(_BOARD_SIZE, visits, 1.0, random.Random(0)))
+
+    def test_never_samples_a_pass_otherwise(self) -> None:
+        visits = {Pass(): 9, Play(Point(0, 0)): 10, Play(Point(1, 1)): 1}
+        rng = random.Random(0)
+        for _ in range(200):
+            self.assertIsInstance(sample_placement(_BOARD_SIZE, visits, 1.0, rng), Play)
+
+    def test_samples_weaker_placements_too(self) -> None:
+        visits = {Play(Point(0, 0)): 10, Play(Point(1, 1)): 5}
+        rng = random.Random(0)
+        chosen = {sample_placement(_BOARD_SIZE, visits, 1.0, rng) for _ in range(200)}
+        self.assertEqual({Play(Point(0, 0)), Play(Point(1, 1))}, chosen)
 
 
 if __name__ == "__main__":

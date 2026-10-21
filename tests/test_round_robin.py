@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import unittest
 
-from eval.round_robin import fit_elo_bradley_terry, missing_pairings
+from eval.match import PlayerStyle
+from eval.round_robin import checkpoint_spec, fit_elo_bradley_terry, missing_pairings
 
 
 class FitEloBradleyTerryTest(unittest.TestCase):
@@ -67,3 +68,14 @@ class MissingPairingsTest(unittest.TestCase):
     def test_nothing_saved_means_every_pairing_is_played(self) -> None:
         pairings = [("a", "b"), ("a", "c")]
         self.assertEqual(missing_pairings(pairings, []), [(0, "a", "b"), (1, "a", "c")])
+
+
+class CheckpointSpecTest(unittest.TestCase):
+    def test_a_plain_path_plays_with_the_field_settings(self) -> None:
+        self.assertEqual(checkpoint_spec("checkpoints/a.pt"), ("checkpoints/a.pt", PlayerStyle()))
+
+    def test_a_mapping_carries_its_own_style(self) -> None:
+        spec = {"path": "checkpoints/a.pt", "num_simulations": 8, "temperature": 1.0}
+        self.assertEqual(
+            checkpoint_spec(spec), ("checkpoints/a.pt", PlayerStyle(num_simulations=8, temperature=1.0))
+        )

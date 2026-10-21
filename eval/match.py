@@ -11,10 +11,12 @@ a match.
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from bootstrap.inference import RayZeroPolicyValueNet
+from engine.move import Move, Pass
 from engine.position import Position
 from engine.scoring import area_score
 from engine.stone import Stone
@@ -25,6 +27,26 @@ from selfplay.self_play import visit_count_policy
 
 DEFAULT_NUM_SIMULATIONS = 200
 DEFAULT_KOMI = 7.5
+
+
+@dataclass(frozen=True)
+class PlayerStyle:
+    """How one side of a match searches and picks its moves, when that differs from the match's
+    shared settings -- e.g. igo-app's "Beginner" level, which runs the gen1 checkpoint with far
+    fewer simulations and samples its moves instead of always playing the best one. Mirrors
+    `igo-app/mcts/Mcts.kt`'s `MctsConfig.numSimulations` / `MctsConfig.moveTemperature`, so the
+    level the app ships is the level this measures.
+    """
+
+    num_simulations: Optional[int] = None
+    """This side's simulations per move; `None` uses the match's `num_simulations`."""
+
+    temperature: Optional[float] = None
+    """When set, this side samples every move of the game from its visit counts at this
+    temperature (no `temperature_drop_move` cutoff) instead of following the match's own
+    temperature schedule. Like `Mcts.kt`'s `moveTemperature`, it only samples among stone
+    placements: it passes when the most-visited move is a pass, and never samples a pass
+    otherwise -- a weak level should misplace stones, not end the game by accident."""
 
 
 def play_match(
@@ -43,6 +65,8 @@ def play_match(
     temperature: float = 0.0,
     temperature_drop_move: Optional[int] = None,
     seed: Optional[int] = None,
+    style_a: PlayerStyle = PlayerStyle(),
+    style_b: PlayerStyle = PlayerStyle(),
 ) -> list[MatchResult]:
     """Plays `num_games` games between `checkpoint_a` and `checkpoint_b` and returns one
     `MatchResult` per game, from `checkpoint_a`'s perspective. Alternates which checkpoint
@@ -64,6 +88,9 @@ def play_match(
     2-for-2 sweep regardless of which checkpoints are being compared. Pass a nonzero
     `temperature` (and a `seed`) for a match whose result should carry real statistical
     weight -- e.g. `eval/promote.py`'s actual promotion decisions.
+
+    `style_a`/`style_b` override one side's search budget and move selection (see
+    `PlayerStyle`); the defaults leave both sides on the shared settings above.
     """
     net_a = RayZeroPolicyValueNet(
         checkpoint_a,
@@ -79,17 +106,25 @@ def play_match(
         num_conv_layers=num_conv_layers_b,
         num_residual_blocks=num_residual_blocks_b,
     )
-    config = MctsConfig(num_simulations=num_simulations, komi=komi)
-    mcts_a = Mcts(net_a, config)
-    mcts_b = Mcts(net_b, config)
+    mcts_a = Mcts(net_a, MctsConfig(num_simulations=style_a.num_simulations or num_simulations, komi=komi))
+    mcts_b = Mcts(net_b, MctsConfig(num_simulations=style_b.num_simulations or num_simulations, komi=komi))
     rng = random.Random(seed)
 
     results: list[MatchResult] = []
     for game_index in range(num_games):
         a_plays_black = game_index % 2 == 0
         black_mcts, white_mcts = (mcts_a, mcts_b) if a_plays_black else (mcts_b, mcts_a)
+        black_style, white_style = (style_a, style_b) if a_plays_black else (style_b, style_a)
         winner = _play_one_game(
-            black_mcts, white_mcts, board_size, komi, temperature, temperature_drop_move, rng
+            black_mcts,
+            white_mcts,
+            board_size,
+            komi,
+            temperature,
+            temperature_drop_move,
+            rng,
+            black_style,
+            white_style,
         )
 
         if winner is None:
@@ -110,6 +145,8 @@ def _play_one_game(
     temperature: float = 0.0,
     temperature_drop_move: Optional[int] = None,
     rng: Optional[random.Random] = None,
+    black_style: PlayerStyle = PlayerStyle(),
+    white_style: PlayerStyle = PlayerStyle(),
 ) -> Optional[Stone]:
     position = Position.empty(board_size)
     # A generous cap against a pathological non-terminating game; any
@@ -118,7 +155,10 @@ def _play_one_game(
     moves_played = 0
     while position.pass_count < 2 and moves_played < max_moves:
         mover = black_mcts if position.to_play == Stone.BLACK else white_mcts
-        if temperature > 0:
+        style = black_style if position.to_play == Stone.BLACK else white_style
+        if style.temperature is not None and style.temperature > 0:
+            move = sample_placement(board_size, mover.search(position).move_visits, style.temperature, rng)
+        elif temperature > 0:
             effective_temperature = (
                 temperature if temperature_drop_move is None or moves_played < temperature_drop_move else 0.0
             )
@@ -130,3 +170,18 @@ def _play_one_game(
         position = position.play(move)
         moves_played += 1
     return area_score(position).winner(komi)
+
+
+def sample_placement(
+    board_size: int, move_visits: dict[Move, int], temperature: float, rng: Optional[random.Random]
+) -> Move:
+    """`PlayerStyle.temperature`'s move choice: passes when the most-visited move is a pass (or the
+    search considered nothing), otherwise samples a stone placement from `move_visits` at
+    `temperature`, with the pass's own visits left out."""
+    if not move_visits:
+        return Pass()
+    best = max(move_visits.items(), key=lambda item: item[1])[0]
+    if isinstance(best, Pass):
+        return best
+    placements = {move: visits for move, visits in move_visits.items() if not isinstance(move, Pass)}
+    return sample_move(board_size, visit_count_policy(board_size, placements), temperature, rng or random.Random())

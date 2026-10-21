@@ -38,8 +38,8 @@ DEFAULT_NUM_FIT_PASSES = 5
 def _play_pairing(
     name_a: str,
     name_b: str,
-    checkpoint_a: str,
-    checkpoint_b: str,
+    spec_a: "str | dict",
+    spec_b: "str | dict",
     board_size: int,
     num_games: int,
     num_simulations: int,
@@ -56,6 +56,9 @@ def _play_pairing(
 
     from eval.match import play_match
 
+    checkpoint_a, style_a = checkpoint_spec(spec_a)
+    checkpoint_b, style_b = checkpoint_spec(spec_b)
+
     # Same reasoning as eval/promote.py's own torch_num_threads: MCTS evaluates one board
     # position at a time, so PyTorch's default per-core thread pool is pure oversubscription
     # overhead once multiple worker processes run concurrently, not speedup.
@@ -71,8 +74,23 @@ def _play_pairing(
         temperature=temperature,
         temperature_drop_move=temperature_drop_move,
         seed=seed,
+        style_a=style_a,
+        style_b=style_b,
     )
     return name_a, name_b, [r.score_a for r in results]
+
+
+def checkpoint_spec(spec: "str | dict") -> tuple[str, "PlayerStyle"]:
+    """A config `checkpoints` entry as `(path, PlayerStyle)`. An entry is either a plain checkpoint
+    path, or a mapping with `path` plus optional `num_simulations` / `temperature` -- a level that
+    plays one checkpoint differently from the rest of the field, e.g. igo-app's "Beginner" (see
+    `eval.match.PlayerStyle`).
+    """
+    from eval.match import PlayerStyle
+
+    if isinstance(spec, str):
+        return spec, PlayerStyle()
+    return spec["path"], PlayerStyle(num_simulations=spec.get("num_simulations"), temperature=spec.get("temperature"))
 
 
 def missing_pairings(
@@ -230,7 +248,7 @@ def main() -> None:
     args = parser.parse_args()
 
     config = yaml.safe_load(args.config.read_text())
-    checkpoints: dict[str, str] = dict(config["checkpoints"])
+    checkpoints: dict[str, "str | dict"] = dict(config["checkpoints"])
     for spec in args.add_checkpoint:
         name, sep, path = spec.partition("=")
         if not sep or not name or not path:

@@ -1,0 +1,43 @@
+# igo-app's "Beginner" level (2026-10-21) on the shipped field's Elo scale: gen1 searching only 8
+# simulations per move and sampling its moves at temperature 1.0 for the whole game (see
+# eval/match.py's PlayerStyle -- mirrors igo-app's MctsConfig.moveTemperature), added after
+# closed-test players found gen1 too strong to start on. 8 rather than 16 simulations from a
+# 20-game pilot: 16 still drew even with the baseline, 8 scored 6/20 against it.
+#
+# The field is what igo-app ships (baseline + gen1-gen11; no gen12). Run with
+#   python -m eval.round_robin --config configs/eval_round_robin_option3_beginner.yaml \
+#       --reuse-existing --out-prefix beginner_
+# so only beginner's 12 pairings are played (the rest are read from the shared results) and the
+# shared round_robin_results.json / checkpoints_elo.json are left untouched.
+
+board_size: 9
+komi: 7.5
+num_games: 40
+num_simulations: 50
+temperature: 1.0
+temperature_drop_move: 16
+seed: 0
+
+anchor: baseline
+
+checkpoints:
+  baseline: checkpoints/bootstrap_batch2_residual_v2.pt
+  gen1: checkpoints/bootstrap_option3_gen1_candidate.pt
+  gen2: checkpoints/bootstrap_option3_gen2_candidate.pt
+  gen3: checkpoints/bootstrap_option3_gen3_candidate.pt
+  gen4: checkpoints/bootstrap_option3_gen4_300games_candidate.pt
+  gen5: checkpoints/bootstrap_option3_gen5_candidate.pt
+  gen6: checkpoints/bootstrap_option3_gen6_candidate.pt
+  gen7: checkpoints/bootstrap_option3_gen7_candidate.pt
+  gen8: checkpoints/bootstrap_option3_gen8_candidate.pt
+  gen9: checkpoints/bootstrap_option3_gen9_candidate.pt
+  gen10: checkpoints/bootstrap_option3_gen10_candidate.pt
+  gen11: checkpoints/bootstrap_option3_gen11_candidate.pt
+  beginner:
+    path: checkpoints/bootstrap_option3_gen1_candidate.pt
+    num_simulations: 8
+    temperature: 1.0
+
+out_dir: eval
+raw_out_name: round_robin_results.json
+elo_out_name: checkpoints_elo.json
