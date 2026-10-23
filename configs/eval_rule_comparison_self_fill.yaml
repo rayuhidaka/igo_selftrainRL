@@ -1,0 +1,41 @@
+# igo-app's "AI stops filling its own territory once the opponent passes" item (2026-10-23):
+# stage C's games again (same pairings and settings), now saved with move histories so
+# eval/rule_comparison.py can classify the post-pass moves (summarize_self_fill).
+#
+#   python -m eval.rule_comparison --config configs/eval_rule_comparison_self_fill.yaml
+#
+# Pairings span the ladder igo-app ships, from Beginner's sloppy endgames (closest to a human
+# beginner's) to gen11 against itself. Same game settings as the round-robin, so the games are
+# the kind the published ratings come from.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+temperature: 1.0
+temperature_drop_move: 16
+seed: 0
+
+area_komi: 7.5
+territory_komi: 6.5
+
+checkpoints:
+  gen1: checkpoints/bootstrap_option3_gen1_candidate.pt
+  gen4: checkpoints/bootstrap_option3_gen4_300games_candidate.pt
+  gen8: checkpoints/bootstrap_option3_gen8_candidate.pt
+  gen11: checkpoints/bootstrap_option3_gen11_candidate.pt
+  beginner:
+    path: checkpoints/bootstrap_option3_gen1_candidate.pt
+    num_simulations: 8
+    temperature: 1.0
+
+pairings:
+  - [beginner, beginner]
+  - [beginner, gen1]
+  - [beginner, gen4]
+  - [gen1, gen4]
+  - [gen4, gen8]
+  - [gen8, gen11]
+  - [gen11, gen11]
+
+out_dir: eval
+out_name: rule_comparison_self_fill_games.json

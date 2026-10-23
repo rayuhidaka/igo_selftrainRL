@@ -172,12 +172,14 @@ class GameEnd:
     """Where one game finished: its final `position` (two passes, unless it hit the move cap),
     how many `moves` it took, and the prisoners each color took -- `black_prisoners` is how many
     white stones Black captured. Prisoners are what `engine.scoring.territory_score` adds on top
-    of territory; area scoring doesn't need them."""
+    of territory; area scoring doesn't need them. `history` is every move in order, so the game
+    can be replayed (`eval/rule_comparison.py`'s self-fill analysis does)."""
 
     position: Position
     moves: int
     black_prisoners: int
     white_prisoners: int
+    history: tuple[Move, ...] = ()
 
     @property
     def finished(self) -> bool:
@@ -204,6 +206,7 @@ def play_game_to_end(
     max_moves = board_size * board_size * 4
     moves_played = 0
     prisoners = {Stone.BLACK: 0, Stone.WHITE: 0}
+    history: list[Move] = []
     while position.pass_count < 2 and moves_played < max_moves:
         mover = black_mcts if position.to_play == Stone.BLACK else white_mcts
         style = black_style if position.to_play == Stone.BLACK else white_style
@@ -221,10 +224,11 @@ def play_game_to_end(
         mover_color = position.to_play
         opponent_stones = position.stones.count(mover_color.opponent())
         position = position.play(move)
+        history.append(move)
         # Suicide is illegal, so a move only ever removes the opponent's stones.
         prisoners[mover_color] += opponent_stones - position.stones.count(mover_color.opponent())
         moves_played += 1
-    return GameEnd(position, moves_played, prisoners[Stone.BLACK], prisoners[Stone.WHITE])
+    return GameEnd(position, moves_played, prisoners[Stone.BLACK], prisoners[Stone.WHITE], tuple(history))
 
 
 def sample_placement(
