@@ -15,6 +15,7 @@ import numpy as np
 from engine.move import Move, Pass
 from engine.position import Position
 from engine.scoring import area_score
+from engine.stone import Stone
 from mcts.policy_value_net import PolicyValueNet
 
 
@@ -60,6 +61,26 @@ class MctsConfig:
     other config knobs.
     """
 
+    score_utility_weight: float = 0.0
+    """Weight of a KataGo-style score bonus added to every value the search backs up, `0.0`
+    (the default) meaning win/loss only -- `Mcts.search`'s existing, unchanged behavior. The
+    nets are trained only to win, so a pure win/loss search is indifferent between winning by
+    half a point and by twenty, and plays for the smallest margin (igo-app's switch to
+    territory counting exposed that, see docs/ROADMAP.md's margin-aware training item). With a
+    nonzero weight each value becomes `value + weight * (2/pi) * atan((score - center) /
+    score_utility_scale)`, `score` being the net's `Evaluation.score` (or a finished game's
+    real margin) and `center` the root's own score estimate -- so the bonus rewards doing
+    better than currently expected, and stays sensitive even far ahead, where a side that
+    doesn't care about margin stops capturing dead stones. The atan bounds the bonus to
+    `+-weight`, so it can never outweigh a real win. With a net without a score head
+    (`Evaluation.score is None`) only finished games get the bonus. Training-side only for now, not yet mirrored to
+    `igo-app`'s `Mcts.kt` (its `.tflite` export drops the score head).
+    """
+
+    score_utility_scale: float = 10.0
+    """Points of margin over which `score_utility_weight`'s bonus rises most steeply --
+    roughly one typical decisive 9x9 margin (gen11's self-play games average ~11 points)."""
+
 
 @dataclass(frozen=True)
 class SearchResult:
@@ -74,7 +95,8 @@ class SearchResult:
     """The visit-weighted average value of the searched root position, from the perspective of
     its player to move: `+1` a certain win, `-1` a certain loss, `0` even. This is the
     search-refined counterpart to a raw `PolicyValueNet.evaluate` value, suitable for a
-    win-rate readout.
+    win-rate readout. With `MctsConfig.score_utility_weight` set it includes the score bonus
+    too, so it can reach `+-(1 + weight)` and isn't a pure win rate any more.
     """
 
 
@@ -111,6 +133,10 @@ class Mcts:
         self._net = net
         self._config = config
         self._rng = rng if rng is not None else np.random.default_rng()
+        # The root's own score estimate, from its player to move's perspective -- the center of
+        # `score_utility_weight`'s bonus. Reset by every `search`, set by the root's expansion.
+        self._root_to_play: Stone | None = None
+        self._score_center = 0.0
 
     def search(self, root: Position) -> SearchResult:
         """Runs `config.num_simulations` simulations from `root` and returns the resulting
@@ -119,6 +145,8 @@ class Mcts:
         deterministic outcome of `area_score`).
         """
         root_node = _Node(prior=1.0)
+        self._root_to_play = root.to_play
+        self._score_center = 0.0
         for _ in range(self._config.num_simulations):
             self._simulate(root_node, root, is_root=True)
         return SearchResult(
@@ -160,7 +188,21 @@ class Mcts:
             priors = self._add_root_noise(priors)
         for move, prior in priors.items():
             node.children[move] = _Node(prior)
-        return evaluation.value
+        if evaluation.score is None:
+            return evaluation.value
+        if is_root:
+            self._score_center = evaluation.score
+        return evaluation.value + self._score_utility(evaluation.score, position.to_play)
+
+    def _score_utility(self, score: float, to_play: Stone) -> float:
+        """`MctsConfig.score_utility_weight`'s bonus for a `score`-point margin from `to_play`'s
+        perspective, measured against the root's own estimate (flipped for the root's opponent).
+        """
+        weight = self._config.score_utility_weight
+        if weight == 0.0:
+            return 0.0
+        center = self._score_center if to_play == self._root_to_play else -self._score_center
+        return weight * (2 / math.pi) * math.atan((score - center) / self._config.score_utility_scale)
 
     def _add_root_noise(self, priors: dict[Move, float]) -> dict[Move, float]:
         """Mixes Dirichlet noise into `priors`, weighted by `MctsConfig.root_dirichlet_epsilon`
@@ -203,9 +245,13 @@ class Mcts:
         return position.pass_count >= 2
 
     def _terminal_value(self, position: Position) -> float:
-        winner = area_score(position).winner(self._config.komi)
+        area = area_score(position)
+        black_margin = area.black - (area.white + self._config.komi)
+        margin = black_margin if position.to_play == Stone.BLACK else -black_margin
+        bonus = self._score_utility(margin, position.to_play)
+        winner = area.winner(self._config.komi)
         if winner == position.to_play:
-            return 1.0
+            return 1.0 + bonus
         if winner is None:
-            return 0.0
-        return -1.0
+            return 0.0 + bonus
+        return -1.0 + bonus

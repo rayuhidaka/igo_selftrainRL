@@ -5,6 +5,7 @@ Run with: python -m unittest discover
 
 from __future__ import annotations
 
+import math
 import unittest
 from typing import Callable
 
@@ -25,12 +26,19 @@ class FakePolicyValueNet:
         self,
         value: Callable[[Position], float] = lambda position: 0.0,
         policy: Callable[[Position], dict[Move, float]] | None = None,
+        score: Callable[[Position], float | None] = lambda position: None,
     ) -> None:
         self._value = value
         self._policy = policy or _uniform_policy
+        self._score = score
 
     def evaluate(self, position: Position) -> Evaluation:
-        return Evaluation(policy=self._policy(position), value=self._value(position))
+        return Evaluation(policy=self._policy(position), value=self._value(position), score=self._score(position))
+
+
+def _black_score(points: Callable[[Position], float]) -> Callable[[Position], float]:
+    """Turns a margin from black's perspective into `Evaluation.score`'s to-play perspective."""
+    return lambda position: points(position) if position.to_play == Stone.BLACK else -points(position)
 
 
 def _uniform_policy(position: Position) -> dict[Move, float]:
@@ -180,6 +188,65 @@ class MctsTest(unittest.TestCase):
             mcts = Mcts(net, config, rng=np.random.default_rng(seed))
             noisy = mcts._add_root_noise(priors)
             self.assertEqual(pass_prior, noisy[Pass()])
+
+    def test_score_utility_is_a_no_op_when_weight_is_zero(self) -> None:
+        # MctsConfig's default: a net's score estimate must not change the search at all.
+        center = Play(Point(1, 1))
+        score = _black_score(lambda position: 20.0 if position.stones[4] == Stone.BLACK else 0.0)
+        with_score = FakePolicyValueNet(score=score)
+        without_score = FakePolicyValueNet()
+        config = MctsConfig(num_simulations=100)
+
+        with_result = Mcts(with_score, config).search(Position.empty(3))
+        without_result = Mcts(without_score, config).search(Position.empty(3))
+
+        self.assertEqual(without_result.move_visits, with_result.move_visits)
+        self.assertEqual(without_result.root_value, with_result.root_value)
+        self.assertIn(center, with_result.move_visits)
+
+    def test_score_utility_favors_the_move_with_the_larger_expected_margin(self) -> None:
+        # Every position has the same value (0), but black taking the center is worth 20
+        # points more -- only the score bonus can tell the moves apart.
+        center = Play(Point(1, 1))
+        score = _black_score(lambda position: 20.0 if position.stones[4] == Stone.BLACK else 0.0)
+        net = FakePolicyValueNet(score=score)
+        mcts = Mcts(net, MctsConfig(num_simulations=100, score_utility_weight=0.5))
+
+        visits = mcts.search(Position.empty(3)).move_visits
+
+        self.assertGreater(visits[center], max(v for move, v in visits.items() if move != center))
+
+    def test_score_utility_is_centered_on_the_roots_own_score_estimate(self) -> None:
+        # Black is 30 points ahead everywhere: with the bonus measured against the root's own
+        # estimate, nothing beats expectations, so the backed-up value stays at the net's 0.
+        # Pass gets no prior so no finished game (scored by its real margin) is ever reached.
+        def no_pass_policy(position: Position) -> dict[Move, float]:
+            moves = [move for move in position.legal_moves() if not isinstance(move, Pass)]
+            return {move: 1.0 / len(moves) for move in moves}
+
+        net = FakePolicyValueNet(policy=no_pass_policy, score=_black_score(lambda position: 30.0))
+        mcts = Mcts(net, MctsConfig(num_simulations=50, score_utility_weight=0.5))
+
+        self.assertAlmostEqual(0.0, mcts.search(Position.empty(3)).root_value)
+
+    def test_score_utility_rewards_a_finished_games_real_margin(self) -> None:
+        # The finished 3x3 game from the root-value test above: black's 5 stones to white's 1
+        # (the empty points touch both colors, so they're nobody's), komi 0.5 -- black wins by
+        # 3.5. No net is consulted, so the center stays at 0.
+        finished = Position(
+            board_size=3,
+            stones=[
+                Stone.BLACK, Stone.BLACK, Stone.BLACK,
+                Stone.BLACK, Stone.BLACK, Stone.EMPTY,
+                Stone.WHITE, Stone.EMPTY, Stone.EMPTY,
+            ],
+            to_play=Stone.BLACK,
+            pass_count=2,
+        )
+        mcts = Mcts(FakePolicyValueNet(), MctsConfig(num_simulations=10, komi=0.5, score_utility_weight=0.5))
+
+        expected = 1.0 + 0.5 * (2 / math.pi) * math.atan(3.5 / 10.0)
+        self.assertAlmostEqual(expected, mcts.search(finished).root_value)
 
 
 if __name__ == "__main__":

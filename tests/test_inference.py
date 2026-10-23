@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import unittest
 
-from bootstrap.inference import decode_policy, encode_planes
+import torch
+
+from bootstrap.inference import RayZeroPolicyValueNet, decode_policy, encode_planes
 from engine.move import Pass, Play
 from engine.point import Point
 from engine.position import Position
@@ -58,6 +60,24 @@ class DecodePolicyTest(unittest.TestCase):
 
         self.assertEqual(9, len(decoded))  # 8 empty points + pass, (1,1) now occupied
         self.assertNotIn(Play(Point(1, 1)), decoded)
+
+
+class EvaluateScoreTest(unittest.TestCase):
+    """Unlike the tests above, runs a real (untrained) forward pass -- `score` has no Kotlin twin."""
+
+    def test_score_is_the_score_heads_output_scaled_back_to_points(self) -> None:
+        net = RayZeroPolicyValueNet(None, board_size=3, has_score_head=True)
+        position = Position.empty(3)
+
+        with torch.no_grad():
+            _, _, raw_score, _ = net.model(encode_planes(position).unsqueeze(0))
+
+        self.assertAlmostEqual(float(raw_score[0, 0]) * 9, net.evaluate(position).score, places=5)
+
+    def test_score_is_none_without_a_score_head(self) -> None:
+        net = RayZeroPolicyValueNet(None, board_size=3, has_score_head=False)
+
+        self.assertIsNone(net.evaluate(Position.empty(3)).score)
 
 
 if __name__ == "__main__":

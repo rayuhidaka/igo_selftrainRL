@@ -16,10 +16,15 @@ class Evaluation:
 
     `value` is from the perspective of the position's player to move: `+1` is a certain win,
     `-1` a certain loss, `0` even.
+
+    `score` is the expected final area-score margin in points (komi included), from the same
+    perspective -- `None` for a net without a score head. Only `MctsConfig.score_utility_weight`
+    reads it.
     """
 
     policy: dict[Move, float]
     value: float
+    score: float | None = None
 
 
 class PolicyValueNet(Protocol):

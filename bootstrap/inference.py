@@ -60,12 +60,14 @@ class RayZeroPolicyValueNet:
     @torch.no_grad()
     def evaluate(self, position: Position) -> Evaluation:
         board_planes = encode_planes(position).unsqueeze(0)  # add the batch dim
-        # The auxiliary score-margin/ownership outputs (if any) are training-only -- see
-        # bootstrap/model.py's module docstring -- discarded here.
-        policy_out, value_out, _, _ = self.model(board_planes)
+        # The ownership output (if any) is training-only -- see bootstrap/model.py's module
+        # docstring -- discarded here. The score head trains on margins divided by
+        # board_size**2 (selfplay/generate.py's score_margin), so it's scaled back to points.
+        policy_out, value_out, score_out, _ = self.model(board_planes)
         return Evaluation(
             policy=decode_policy(position, policy_out[0].tolist()),
             value=float(value_out[0, 0]),
+            score=None if score_out is None else float(score_out[0, 0]) * self.board_size * self.board_size,
         )
 
 
