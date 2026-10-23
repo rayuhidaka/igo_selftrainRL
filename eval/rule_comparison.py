@@ -40,7 +40,7 @@ from engine.life_and_death import estimate_dead_stones, without_dead_stones
 from engine.move import Move, Pass, Play
 from engine.point import Point
 from engine.position import Position
-from engine.scoring import area_score, territory_ownership, territory_score
+from engine.scoring import area_score, saves_chain_in_atari, territory_ownership, territory_score
 from engine.stone import Stone
 
 
@@ -63,6 +63,7 @@ def game_record(end: "GameEnd", black: str, white: str) -> dict:
         "white_prisoners": end.white_prisoners,
         "board_size": end.position.board_size,
         "history": encode_history(end.history, end.position.board_size),
+        "self_fill_pass": {Stone.BLACK: "black", Stone.WHITE: "white", None: None}[end.self_fill_pass],
     }
 
 
@@ -126,27 +127,6 @@ PASS_RULES = {
     "with_dead_read": {"enclosed", "dead_stones"},
 }
 """The rule variants measured: the post-pass kinds each one turns into a pass."""
-
-
-def saves_chain_in_atari(position: Position, point: Point, color: Stone) -> bool:
-    """Whether playing `point` gives a liberty to a `color` chain in atari -- one whose only
-    liberty is `point`."""
-    for neighbor in position.neighbors(point):
-        if position.stone_at(neighbor) != color:
-            continue
-        chain, liberties = {neighbor}, set()
-        stack = [neighbor]
-        while stack:
-            for p in position.neighbors(stack.pop()):
-                stone = position.stone_at(p)
-                if stone == Stone.EMPTY:
-                    liberties.add(p)
-                elif stone == color and p not in chain:
-                    chain.add(p)
-                    stack.append(p)
-        if liberties == {point}:
-            return True
-    return False
 
 
 def classify_post_pass_move(before: Position, point: Point, final: Position) -> str:
@@ -239,6 +219,30 @@ def summarize_self_fill(records: list[dict], area_komi: float, territory_komi: f
         "enclosed_not_after_pass": enclosed_not_after_pass,
         "rules": rules,
     }
+
+
+def summarize_players(records: list[dict], area_komi: float, territory_komi: float) -> dict:
+    """Per player name over the finished games: wins under each count, its mean territory margin,
+    and how many games its `pass_instead_of_self_fill` ended -- for a head-to-head such as
+    `configs/eval_self_fill_head_to_head.yaml`. A game between two entries of the same name
+    counts once for each side."""
+    players: dict[str, dict] = {}
+    for r in (r for r in records if r["finished"]):
+        area = black_margin(r["black_area"], r["white_area"], area_komi)
+        territory = black_margin(r["black_territory"], r["white_territory"], territory_komi)
+        for color, sign in (("black", 1), ("white", -1)):
+            stats = players.setdefault(
+                r[color], {"games": 0, "territory_wins": 0, "area_wins": 0, "margin_sum": 0.0, "self_fill_passes": 0}
+            )
+            stats["games"] += 1
+            stats["territory_wins"] += sign * territory > 0
+            stats["area_wins"] += sign * area > 0
+            stats["margin_sum"] += sign * territory
+            stats["self_fill_passes"] += r.get("self_fill_pass") == color
+    for stats in players.values():
+        stats["territory_win_rate"] = stats["territory_wins"] / stats["games"]
+        stats["mean_territory_margin"] = stats.pop("margin_sum") / stats["games"]
+    return players
 
 
 def _play_pairing(
@@ -340,6 +344,7 @@ def main() -> None:
     print(f"Overall (area komi {area_komi}, territory komi {territory_komi}): {summarize(records, area_komi, territory_komi)}")
     for komi in (5.5, 6.5, 7.5):
         print(f"  territory komi {komi}: {summarize(records, area_komi, komi)}")
+    print(f"Per player: {json.dumps(summarize_players(records, area_komi, territory_komi), indent=1)}")
     if all("history" in r for r in records):
         print(f"Self-fill after the opponent's pass: {json.dumps(summarize_self_fill(records, area_komi, territory_komi), indent=1)}")
     else:

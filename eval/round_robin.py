@@ -84,15 +84,19 @@ def _play_pairing(
 
 def checkpoint_spec(spec: "str | dict") -> tuple[str, "PlayerStyle"]:
     """A config `checkpoints` entry as `(path, PlayerStyle)`. An entry is either a plain checkpoint
-    path, or a mapping with `path` plus optional `num_simulations` / `temperature` -- a level that
-    plays one checkpoint differently from the rest of the field, e.g. igo-app's "Beginner" (see
-    `eval.match.PlayerStyle`).
+    path, or a mapping with `path` plus optional `num_simulations` / `temperature` /
+    `pass_instead_of_self_fill` -- a level that plays one checkpoint differently from the rest of
+    the field, e.g. igo-app's "Beginner" (see `eval.match.PlayerStyle`).
     """
     from eval.match import PlayerStyle
 
     if isinstance(spec, str):
         return spec, PlayerStyle()
-    return spec["path"], PlayerStyle(num_simulations=spec.get("num_simulations"), temperature=spec.get("temperature"))
+    return spec["path"], PlayerStyle(
+        num_simulations=spec.get("num_simulations"),
+        temperature=spec.get("temperature"),
+        pass_instead_of_self_fill=spec.get("pass_instead_of_self_fill", False),
+    )
 
 
 def missing_pairings(

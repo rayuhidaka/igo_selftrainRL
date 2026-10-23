@@ -18,17 +18,17 @@ from bootstrap.model import RayZeroNet
 from engine.move import Pass, Play
 from engine.point import Point
 from engine.position import Position
-from engine.scoring import AreaScore, area_score, territory_score
+from engine.scoring import AreaScore, area_score, is_own_territory_fill, saves_chain_in_atari, territory_score
 from engine.stone import Stone
-from eval.match import play_game_to_end
+from eval.match import PlayerStyle, play_game_to_end
 from eval.rule_comparison import (
     analyze_self_fill,
     black_margin,
     classify_post_pass_move,
     decode_history,
     encode_history,
-    saves_chain_in_atari,
     summarize,
+    summarize_players,
     summarize_self_fill,
 )
 from mcts.mcts import Mcts, MctsConfig
@@ -171,12 +171,58 @@ class SelfFillTest(unittest.TestCase):
         self.assertEqual(0, sum(analysis["kinds"].values()))
         self.assertEqual((10, 5), analysis["rule_ends"]["enclosed_only"])
 
+    def test_own_territory_fill_excludes_saving_a_chain_in_atari(self) -> None:
+        position = _board(*_WALLS, to_play=Stone.WHITE)
+        self.assertTrue(is_own_territory_fill(position, Point(0, 4)))
+        self.assertFalse(is_own_territory_fill(position, Point(0, 1)))
+        # Black's (0,0) stone has (1,0) as its only liberty, inside Black's own area.
+        in_atari = _board("XO...", ".X...", "X....", ".....", ".....")
+        self.assertFalse(is_own_territory_fill(in_atari, Point(1, 0)))
+
+    def test_pass_instead_of_self_fill_ends_the_game_before_the_fill(self) -> None:
+        script = [move for row in range(5) for move in (Play(Point(row, 2)), Play(Point(row, 3)))]
+        script += [Pass(), Play(Point(0, 4)), Pass(), Pass()]
+
+        class Scripted:
+            def select_move(self, position: Position):
+                return script.pop(0)
+
+        end = play_game_to_end(
+            Scripted(), Scripted(), 5, white_style=PlayerStyle(pass_instead_of_self_fill=True)
+        )
+        self.assertEqual(Stone.WHITE, end.self_fill_pass)
+        self.assertEqual(12, end.moves)
+        self.assertEqual(Stone.EMPTY, end.position.stone_at(Point(0, 4)))
+        self.assertTrue(end.finished)
+
+    def test_without_the_rule_the_fill_is_played(self) -> None:
+        script = [move for row in range(5) for move in (Play(Point(row, 2)), Play(Point(row, 3)))]
+        script += [Pass(), Play(Point(0, 4)), Pass(), Pass()]
+
+        class Scripted:
+            def select_move(self, position: Position):
+                return script.pop(0)
+
+        end = play_game_to_end(Scripted(), Scripted(), 5)
+        self.assertIsNone(end.self_fill_pass)
+        self.assertEqual(Stone.WHITE, end.position.stone_at(Point(0, 4)))
+
     def test_summary_counts_flips_the_rule_fixes(self) -> None:
         # Area B 15 vs W 10: White wins at komi 5.5. Territory with the fill: B 10 vs W 4, Black
         # wins at komi 5.5 -- a flip. Ending before the fill: 10 vs 5 -- White wins, fixed.
         stats = summarize_self_fill([_walls_game_record(white_fills=True)], area_komi=5.5, territory_komi=5.5)
         self.assertEqual(1, stats["post_pass_moves"]["enclosed"])
         self.assertEqual({"flips": 0, "fixed": 1, "introduced": 0, "flip_rate": 0.0}, stats["rules"]["enclosed_only"])
+
+    def test_player_summary_takes_each_sides_perspective(self) -> None:
+        record = dict(_walls_game_record(white_fills=False), black="rule", white="plain", self_fill_pass="black")
+        # Territory B 10 vs W 5: Black wins by 10 - 5 - 4.5 = 0.5; area 15 vs 10 + 4.5 too.
+        players = summarize_players([record], area_komi=4.5, territory_komi=4.5)
+        self.assertEqual(1, players["rule"]["territory_wins"])
+        self.assertEqual(0.5, players["rule"]["mean_territory_margin"])
+        self.assertEqual(-0.5, players["plain"]["mean_territory_margin"])
+        self.assertEqual(1, players["rule"]["self_fill_passes"])
+        self.assertEqual(0, players["plain"]["self_fill_passes"])
 
 
 class SummarizeTest(unittest.TestCase):

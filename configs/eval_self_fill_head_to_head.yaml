@@ -1,0 +1,44 @@
+# igo-app's "AI stops filling its own territory once the opponent passes" item (2026-10-23):
+# gen11 with the rule (eval/match.py's PlayerStyle.pass_instead_of_self_fill) against plain
+# gen11, decided by territory scoring -- real continuations, no hindsight dead-stone read
+# (configs/eval_rule_comparison_self_fill.yaml's analysis needed one). Read "Per player" in the
+# output: gen11_rule's territory win rate against gen11, and each one's margin against Beginner,
+# whose early, sloppy passes are the closest stand-in here for a human passing too soon.
+#
+#   python -m eval.rule_comparison --config configs/eval_self_fill_head_to_head.yaml
+#
+# The pairing repeats so its games spread across workers; each repeat gets its own seed.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+temperature: 1.0
+temperature_drop_move: 16
+seed: 100
+
+area_komi: 7.5
+territory_komi: 6.5
+
+checkpoints:
+  gen11: checkpoints/bootstrap_option3_gen11_candidate.pt
+  gen11_rule:
+    path: checkpoints/bootstrap_option3_gen11_candidate.pt
+    pass_instead_of_self_fill: true
+  beginner:
+    path: checkpoints/bootstrap_option3_gen1_candidate.pt
+    num_simulations: 8
+    temperature: 1.0
+
+pairings:
+  - [gen11_rule, gen11]
+  - [gen11_rule, gen11]
+  - [gen11_rule, gen11]
+  - [gen11_rule, gen11]
+  - [gen11_rule, gen11]
+  - [gen11_rule, beginner]
+  - [gen11_rule, beginner]
+  - [gen11, beginner]
+  - [gen11, beginner]
+
+out_dir: eval
+out_name: self_fill_head_to_head_games.json

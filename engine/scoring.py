@@ -155,6 +155,40 @@ def ownership_plane(ownership: dict[Point, Optional[Stone]], board_size: int, pe
     return plane
 
 
+def saves_chain_in_atari(position: Position, point: Point, color: Stone) -> bool:
+    """Whether playing `point` gives a liberty to a `color` chain in atari -- one whose only
+    liberty is `point`."""
+    for neighbor in position.neighbors(point):
+        if position.stone_at(neighbor) != color:
+            continue
+        chain, liberties = {neighbor}, set()
+        stack = [neighbor]
+        while stack:
+            for p in position.neighbors(stack.pop()):
+                stone = position.stone_at(p)
+                if stone == Stone.EMPTY:
+                    liberties.add(p)
+                elif stone == color and p not in chain:
+                    chain.add(p)
+                    stack.append(p)
+        if liberties == {point}:
+            return True
+    return False
+
+
+def is_own_territory_fill(position: Position, point: Point) -> bool:
+    """Whether a stone at `point` by the player to move would fill its own territory: a point
+    only that player's stones border (`territory_ownership`), and not one that saves its own
+    chain in atari. Under territory scoring every such stone costs its player a point.
+
+    No Kotlin counterpart yet: added 2026-10-23 to measure igo-app's proposed "AI passes instead
+    of filling its own territory once the opponent passes" rule (`eval/match.py`'s
+    `PlayerStyle.pass_instead_of_self_fill`); port it to `Scoring.kt` with the app-side rule.
+    """
+    mover = position.to_play
+    return territory_ownership(position)[point] == mover and not saves_chain_in_atari(position, point, mover)
+
+
 def _flood_fill_empty_region(position: Position, start: Point, visited: set[Point]) -> set[Point]:
     region = {start}
     visited.add(start)

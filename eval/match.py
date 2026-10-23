@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Optional
 
 from bootstrap.inference import RayZeroPolicyValueNet
-from engine.move import Move, Pass
+from engine.move import Move, Pass, Play
 from engine.position import Position
-from engine.scoring import area_score, territory_score
+from engine.scoring import area_score, is_own_territory_fill, territory_score
 from engine.stone import Stone
 from eval.elo import MatchResult
 from mcts.mcts import Mcts, MctsConfig
@@ -47,6 +47,12 @@ class PlayerStyle:
     temperature schedule. Like `Mcts.kt`'s `moveTemperature`, it only samples among stone
     placements: it passes when the most-visited move is a pass, and never samples a pass
     otherwise -- a weak level should misplace stones, not end the game by accident."""
+
+    pass_instead_of_self_fill: bool = False
+    """When true, right after the opponent passes this side passes (ending the game) instead of
+    placing a stone that fills its own territory (`engine.scoring.is_own_territory_fill`) --
+    igo-app's proposed rule for territory scoring, measured head-to-head by
+    `configs/eval_self_fill_head_to_head.yaml`."""
 
 
 def play_match(
@@ -173,13 +179,15 @@ class GameEnd:
     how many `moves` it took, and the prisoners each color took -- `black_prisoners` is how many
     white stones Black captured. Prisoners are what `engine.scoring.territory_score` adds on top
     of territory; area scoring doesn't need them. `history` is every move in order, so the game
-    can be replayed (`eval/rule_comparison.py`'s self-fill analysis does)."""
+    can be replayed (`eval/rule_comparison.py`'s self-fill analysis does). `self_fill_pass` is
+    the color whose `PlayerStyle.pass_instead_of_self_fill` ended the game, if one did."""
 
     position: Position
     moves: int
     black_prisoners: int
     white_prisoners: int
     history: tuple[Move, ...] = ()
+    self_fill_pass: Optional[Stone] = None
 
     @property
     def finished(self) -> bool:
@@ -207,6 +215,7 @@ def play_game_to_end(
     moves_played = 0
     prisoners = {Stone.BLACK: 0, Stone.WHITE: 0}
     history: list[Move] = []
+    self_fill_pass: Optional[Stone] = None
     while position.pass_count < 2 and moves_played < max_moves:
         mover = black_mcts if position.to_play == Stone.BLACK else white_mcts
         style = black_style if position.to_play == Stone.BLACK else white_style
@@ -221,6 +230,14 @@ def play_game_to_end(
             move = sample_move(board_size, policy, effective_temperature, rng)
         else:
             move = mover.select_move(position)
+        if (
+            style.pass_instead_of_self_fill
+            and position.pass_count == 1
+            and isinstance(move, Play)
+            and is_own_territory_fill(position, move.point)
+        ):
+            move = Pass()
+            self_fill_pass = position.to_play
         mover_color = position.to_play
         opponent_stones = position.stones.count(mover_color.opponent())
         position = position.play(move)
@@ -228,7 +245,7 @@ def play_game_to_end(
         # Suicide is illegal, so a move only ever removes the opponent's stones.
         prisoners[mover_color] += opponent_stones - position.stones.count(mover_color.opponent())
         moves_played += 1
-    return GameEnd(position, moves_played, prisoners[Stone.BLACK], prisoners[Stone.WHITE], tuple(history))
+    return GameEnd(position, moves_played, prisoners[Stone.BLACK], prisoners[Stone.WHITE], tuple(history), self_fill_pass)
 
 
 def sample_placement(
