@@ -63,6 +63,30 @@ def area_score(position: Position) -> AreaScore:
     return AreaScore(black, white)
 
 
+def territory_score(position: Position, black_prisoners: int, white_prisoners: int) -> AreaScore:
+    """Computes a Japanese-style territory score, excluding komi: each color's empty points
+    bordered only by that color (the same regions `territory_ownership` reads) plus the
+    prisoners it took -- `black_prisoners` is how many white stones Black captured, and the
+    other way round. Stones on the board don't count, unlike `area_score`. Returned as an
+    `AreaScore` so `winner(komi)` works the same; Japanese komi is usually 6.5, not 7.5.
+
+    Like `area_score` it assumes dead stones were already captured in play -- a Tromp-Taylor
+    trained net does that before passing -- and it doesn't treat seki specially (under
+    Japanese rules eye points inside a seki aren't territory; they count here).
+
+    Added 2026-10-23 for igo-app's scoring overhaul, stage C (`eval/rule_comparison.py`).
+    """
+    black = white = 0
+    for point, owner in territory_ownership(position).items():
+        if position.stone_at(point) != Stone.EMPTY:
+            continue
+        if owner == Stone.BLACK:
+            black += 1
+        elif owner == Stone.WHITE:
+            white += 1
+    return AreaScore(black + black_prisoners, white + white_prisoners)
+
+
 def territory_ownership(position: Position) -> dict[Point, Optional[Stone]]:
     """Returns, for every point on the board, which color's area it counts toward under
     Tromp-Taylor scoring: the stone's own color if occupied, the bordering color if it's

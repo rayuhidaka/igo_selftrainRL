@@ -148,11 +148,49 @@ def _play_one_game(
     black_style: PlayerStyle = PlayerStyle(),
     white_style: PlayerStyle = PlayerStyle(),
 ) -> Optional[Stone]:
+    end = play_game_to_end(
+        black_mcts, white_mcts, board_size, temperature, temperature_drop_move, rng, black_style, white_style
+    )
+    return area_score(end.position).winner(komi)
+
+
+@dataclass(frozen=True)
+class GameEnd:
+    """Where one game finished: its final `position` (two passes, unless it hit the move cap),
+    how many `moves` it took, and the prisoners each color took -- `black_prisoners` is how many
+    white stones Black captured. Prisoners are what `engine.scoring.territory_score` adds on top
+    of territory; area scoring doesn't need them."""
+
+    position: Position
+    moves: int
+    black_prisoners: int
+    white_prisoners: int
+
+    @property
+    def finished(self) -> bool:
+        """Whether the game ended in two passes rather than at the move cap."""
+        return self.position.pass_count >= 2
+
+
+def play_game_to_end(
+    black_mcts: Mcts,
+    white_mcts: Mcts,
+    board_size: int,
+    temperature: float = 0.0,
+    temperature_drop_move: Optional[int] = None,
+    rng: Optional[random.Random] = None,
+    black_style: PlayerStyle = PlayerStyle(),
+    white_style: PlayerStyle = PlayerStyle(),
+) -> GameEnd:
+    """Plays one game between `black_mcts` and `white_mcts` (move selection as in `play_match`)
+    and returns where it ended, prisoners included -- `eval/rule_comparison.py` counts the same
+    game under both area and territory scoring."""
     position = Position.empty(board_size)
     # A generous cap against a pathological non-terminating game; any
     # reasonably-trained net should finish well before this via two passes.
     max_moves = board_size * board_size * 4
     moves_played = 0
+    prisoners = {Stone.BLACK: 0, Stone.WHITE: 0}
     while position.pass_count < 2 and moves_played < max_moves:
         mover = black_mcts if position.to_play == Stone.BLACK else white_mcts
         style = black_style if position.to_play == Stone.BLACK else white_style
@@ -167,9 +205,13 @@ def _play_one_game(
             move = sample_move(board_size, policy, effective_temperature, rng)
         else:
             move = mover.select_move(position)
+        mover_color = position.to_play
+        opponent_stones = position.stones.count(mover_color.opponent())
         position = position.play(move)
+        # Suicide is illegal, so a move only ever removes the opponent's stones.
+        prisoners[mover_color] += opponent_stones - position.stones.count(mover_color.opponent())
         moves_played += 1
-    return area_score(position).winner(komi)
+    return GameEnd(position, moves_played, prisoners[Stone.BLACK], prisoners[Stone.WHITE])
 
 
 def sample_placement(

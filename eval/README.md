@@ -52,3 +52,18 @@ after `temperature_drop_move`, default move 16) rather than `match.py`'s
 own more conservative `0.0` default — a real promotion decision needs
 statistical power across `num_games` *different* games, not the same
 deterministic game replayed `num_games` times over.
+
+## Area vs territory scoring (`rule_comparison.py`)
+
+`igo-app` is moving to Japanese (territory) scoring, while every net here was trained with
+area scoring. `rule_comparison.py` plays the shipped levels against each other
+(`configs/eval_rule_comparison.yaml`), keeps each final board and the prisoners
+(`match.py`'s `play_game_to_end`), and counts every game both ways — `engine/scoring.py`'s
+`area_score` and `territory_score`. A **flip** is a game whose winner differs. Per-game counts
+go to `eval/rule_comparison_games.json`; `--summarize-only` re-reads them for other komi
+values.
+
+Useful identity when reading the results: Black's area margin minus its territory margin
+equals Black's stone placements minus White's. Under area scoring a placement inside your own
+territory is free, so an area-trained net that keeps playing there while its opponent passes
+gives away exactly that many points under territory scoring.

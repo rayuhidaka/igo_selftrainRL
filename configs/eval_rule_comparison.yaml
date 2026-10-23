@@ -1,0 +1,41 @@
+# igo-app's scoring overhaul, stage C (2026-10-23): count the shipped levels' own games under
+# area scoring (komi 7.5, what the nets were trained on) and Japanese territory scoring (komi
+# 6.5), to see how often the winner changes. See eval/rule_comparison.py.
+#
+#   python -m eval.rule_comparison --config configs/eval_rule_comparison.yaml
+#
+# Pairings span the ladder igo-app ships, from Beginner's sloppy endgames (closest to a human
+# beginner's) to gen11 against itself. Same game settings as the round-robin, so the games are
+# the kind the published ratings come from.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+temperature: 1.0
+temperature_drop_move: 16
+seed: 0
+
+area_komi: 7.5
+territory_komi: 6.5
+
+checkpoints:
+  gen1: checkpoints/bootstrap_option3_gen1_candidate.pt
+  gen4: checkpoints/bootstrap_option3_gen4_300games_candidate.pt
+  gen8: checkpoints/bootstrap_option3_gen8_candidate.pt
+  gen11: checkpoints/bootstrap_option3_gen11_candidate.pt
+  beginner:
+    path: checkpoints/bootstrap_option3_gen1_candidate.pt
+    num_simulations: 8
+    temperature: 1.0
+
+pairings:
+  - [beginner, beginner]
+  - [beginner, gen1]
+  - [beginner, gen4]
+  - [gen1, gen4]
+  - [gen4, gen8]
+  - [gen8, gen11]
+  - [gen11, gen11]
+
+out_dir: eval
+out_name: rule_comparison_games.json
