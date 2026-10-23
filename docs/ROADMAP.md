@@ -1020,3 +1020,24 @@ scheduling, session length) is still to be decided — revisit when Phase
 - [x] **Elo-over-generations chart in-app — done 2026-09-23, see
       `igo-app/docs/ROADMAP.md`'s mirrored entry for the app-side
       detail (EloStrengthGraph, post-game callout, EloHistoryScreen).**
+
+- [ ] **Margin-aware training (opened 2026-10-23, after igo-app's scoring overhaul stage C;
+      to tackle once igo-app's other closed-test fixes are done).** Every generation was
+      trained only to win, never to win by more, which igo-app's switch to Japanese
+      (territory) scoring exposed (`eval/rule_comparison.py`, `eval/README.md`):
+      - 27 of 278 games of the shipped levels change winner under territory scoring (9.7 %),
+        25 of them decided by 2.5 points or less — the nets aim for the smallest winning
+        margin, so a one-point komi difference plus a few stones placed inside their own
+        territory decides them.
+      - A side far ahead doesn't capture dead stones (it passes while the loser drops stones
+        into its territory), so `mcts/dead_stone_estimator.py`'s playouts — and igo-app's
+        on-device dead-stone proposal — miss those stones. The ownership head, trained on the
+        same endings, shares the blind spot.
+      - A search-side fix (pass after the opponent's pass once the board is settled) was
+        tried and dropped: it needs a dead-stone read the nets can't give in exactly those
+        positions.
+      Likely direction: KataGo-style score utility in self-play search (value plus a small
+      bonus from the existing, trained score head), so the nets play for margin; possibly
+      territory scoring as the self-play reward. igo-app ships Japanese scoring on the
+      current nets meanwhile (decided 2026-10-23), with the level ratings re-fit under
+      territory counting.

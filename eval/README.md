@@ -67,3 +67,9 @@ Useful identity when reading the results: Black's area margin minus its territor
 equals Black's stone placements minus White's. Under area scoring a placement inside your own
 territory is free, so an area-trained net that keeps playing there while its opponent passes
 gives away exactly that many points under territory scoring.
+
+**First result (2026-10-23):** 27 of 278 finished games flip (9.7 % at territory komi 6.5),
+25 of them decided by 2.5 points or less — the nets play for the smallest winning margin. A
+pass rule ("pass after the opponent's pass once nothing is left open") was tried and dropped:
+it needs a list of dead stones, and the nets can't supply one when a side is far ahead (it
+doesn't bother capturing). See docs/ROADMAP.md's "Margin-aware training".
