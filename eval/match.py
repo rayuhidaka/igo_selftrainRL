@@ -54,6 +54,19 @@ class PlayerStyle:
     igo-app's proposed rule for territory scoring, measured head-to-head by
     `configs/eval_self_fill_head_to_head.yaml`."""
 
+    score_utility_weight: float = 0.0
+    """This side's `MctsConfig.score_utility_weight` -- `0.0` plays for the win only, as every
+    shipped level does. Measured by `configs/eval_score_utility.yaml` (margin-aware training,
+    stage 2)."""
+
+    def mcts_config(self, num_simulations: int, komi: float) -> MctsConfig:
+        """This side's search settings, falling back to the match's shared `num_simulations`."""
+        return MctsConfig(
+            num_simulations=self.num_simulations or num_simulations,
+            komi=komi,
+            score_utility_weight=self.score_utility_weight,
+        )
+
 
 def play_match(
     checkpoint_a: Path,
@@ -119,8 +132,8 @@ def play_match(
         num_conv_layers=num_conv_layers_b,
         num_residual_blocks=num_residual_blocks_b,
     )
-    mcts_a = Mcts(net_a, MctsConfig(num_simulations=style_a.num_simulations or num_simulations, komi=komi))
-    mcts_b = Mcts(net_b, MctsConfig(num_simulations=style_b.num_simulations or num_simulations, komi=komi))
+    mcts_a = Mcts(net_a, style_a.mcts_config(num_simulations, komi))
+    mcts_b = Mcts(net_b, style_b.mcts_config(num_simulations, komi))
     rng = random.Random(seed)
 
     results: list[MatchResult] = []

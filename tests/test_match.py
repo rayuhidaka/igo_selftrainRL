@@ -153,6 +153,18 @@ class PlayMatchTest(unittest.TestCase):
             self.assertEqual(4, len(results))
 
 
+class PlayerStyleTest(unittest.TestCase):
+    def test_mcts_config_falls_back_to_the_match_settings(self) -> None:
+        config = PlayerStyle().mcts_config(num_simulations=50, komi=6.5)
+
+        self.assertEqual((50, 6.5, 0.0), (config.num_simulations, config.komi, config.score_utility_weight))
+
+    def test_mcts_config_carries_the_sides_own_settings(self) -> None:
+        config = PlayerStyle(num_simulations=8, score_utility_weight=0.25).mcts_config(num_simulations=50, komi=7.5)
+
+        self.assertEqual((8, 0.25), (config.num_simulations, config.score_utility_weight))
+
+
 class SamplePlacementTest(unittest.TestCase):
     def test_passes_when_the_most_visited_move_is_a_pass(self) -> None:
         visits = {Pass(): 10, Play(Point(0, 0)): 3}

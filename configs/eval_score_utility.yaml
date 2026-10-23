@@ -1,0 +1,69 @@
+# Margin-aware training, stage 2 (2026-10-24, igo-app's docs/ROADMAP.md): gen11 searching with
+# a score bonus (mcts/mcts.py's MctsConfig.score_utility_weight), no retraining, at three
+# weights. Questions, each read off the output:
+#   - strength: "Per player" territory win rate of gen11_suNN against plain gen11 (the
+#     [gen11_suNN, gen11] pairings) -- playing for margin mustn't cost wins;
+#   - flips: the self-pairings' flip rate against [gen11, gen11]'s (9.7% across all shipped
+#     levels on 2026-10-23, eval/README.md);
+#   - margin when far ahead: each one's mean territory margin against Beginner.
+#
+#   python -m eval.rule_comparison --config configs/eval_score_utility.yaml
+#
+# Pairings repeat so their games spread across workers; each repeat gets its own seed. The
+# own-territory pass rule (pass_instead_of_self_fill) stays off everywhere, to measure the
+# score bonus alone.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+temperature: 1.0
+temperature_drop_move: 16
+seed: 200
+
+area_komi: 7.5
+territory_komi: 6.5
+
+checkpoints:
+  gen11: checkpoints/bootstrap_option3_gen11_candidate.pt
+  gen11_su10:
+    path: checkpoints/bootstrap_option3_gen11_candidate.pt
+    score_utility_weight: 0.1
+  gen11_su25:
+    path: checkpoints/bootstrap_option3_gen11_candidate.pt
+    score_utility_weight: 0.25
+  gen11_su50:
+    path: checkpoints/bootstrap_option3_gen11_candidate.pt
+    score_utility_weight: 0.5
+  beginner:
+    path: checkpoints/bootstrap_option3_gen1_candidate.pt
+    num_simulations: 8
+    temperature: 1.0
+
+pairings:
+  - [gen11, gen11]
+  - [gen11, gen11]
+  - [gen11, beginner]
+  - [gen11_su10, gen11]
+  - [gen11_su10, gen11]
+  - [gen11_su10, gen11]
+  - [gen11_su10, gen11]
+  - [gen11_su10, gen11_su10]
+  - [gen11_su10, gen11_su10]
+  - [gen11_su10, beginner]
+  - [gen11_su25, gen11]
+  - [gen11_su25, gen11]
+  - [gen11_su25, gen11]
+  - [gen11_su25, gen11]
+  - [gen11_su25, gen11_su25]
+  - [gen11_su25, gen11_su25]
+  - [gen11_su25, beginner]
+  - [gen11_su50, gen11]
+  - [gen11_su50, gen11]
+  - [gen11_su50, gen11]
+  - [gen11_su50, gen11]
+  - [gen11_su50, gen11_su50]
+  - [gen11_su50, gen11_su50]
+  - [gen11_su50, beginner]
+
+out_dir: eval
+out_name: score_utility_games.json

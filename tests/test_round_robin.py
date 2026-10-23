@@ -79,3 +79,7 @@ class CheckpointSpecTest(unittest.TestCase):
         self.assertEqual(
             checkpoint_spec(spec), ("checkpoints/a.pt", PlayerStyle(num_simulations=8, temperature=1.0))
         )
+
+    def test_a_mapping_can_set_a_score_utility_weight(self) -> None:
+        spec = {"path": "checkpoints/a.pt", "score_utility_weight": 0.25}
+        self.assertEqual(checkpoint_spec(spec), ("checkpoints/a.pt", PlayerStyle(score_utility_weight=0.25)))

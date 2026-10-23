@@ -264,18 +264,12 @@ def _play_pairing(
     from bootstrap.inference import RayZeroPolicyValueNet
     from eval.match import play_game_to_end
     from eval.round_robin import checkpoint_spec
-    from mcts.mcts import Mcts, MctsConfig
+    from mcts.mcts import Mcts
 
     torch.set_num_threads(1)
     (path_a, style_a), (path_b, style_b) = checkpoint_spec(spec_a), checkpoint_spec(spec_b)
-    mcts_a = Mcts(
-        RayZeroPolicyValueNet(Path(path_a), board_size),
-        MctsConfig(num_simulations=style_a.num_simulations or num_simulations, komi=komi),
-    )
-    mcts_b = Mcts(
-        RayZeroPolicyValueNet(Path(path_b), board_size),
-        MctsConfig(num_simulations=style_b.num_simulations or num_simulations, komi=komi),
-    )
+    mcts_a = Mcts(RayZeroPolicyValueNet(Path(path_a), board_size), style_a.mcts_config(num_simulations, komi))
+    mcts_b = Mcts(RayZeroPolicyValueNet(Path(path_b), board_size), style_b.mcts_config(num_simulations, komi))
     rng = random.Random(seed)
     records = []
     for game_index in range(num_games):
