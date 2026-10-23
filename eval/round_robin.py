@@ -47,6 +47,7 @@ def _play_pairing(
     temperature: float,
     temperature_drop_move: int,
     seed: int,
+    territory_komi: "float | None" = None,
 ) -> tuple[str, str, list[float]]:
     # Imported inside the worker function, not at module scope -- ProcessPoolExecutor pickles
     # this function's closure for each worker process, and torch/mcts import machinery is
@@ -76,6 +77,7 @@ def _play_pairing(
         seed=seed,
         style_a=style_a,
         style_b=style_b,
+        territory_komi=territory_komi,
     )
     return name_a, name_b, [r.score_a for r in results]
 
@@ -299,6 +301,7 @@ def main() -> None:
                     config.get("temperature", 1.0),
                     config.get("temperature_drop_move", 16),
                     base_seed + i,
+                    config.get("territory_komi"),
                 ): (name_a, name_b)
                 for i, name_a, name_b in to_play
             }

@@ -18,7 +18,7 @@ from typing import Optional
 from bootstrap.inference import RayZeroPolicyValueNet
 from engine.move import Move, Pass
 from engine.position import Position
-from engine.scoring import area_score
+from engine.scoring import area_score, territory_score
 from engine.stone import Stone
 from eval.elo import MatchResult
 from mcts.mcts import Mcts, MctsConfig
@@ -67,6 +67,7 @@ def play_match(
     seed: Optional[int] = None,
     style_a: PlayerStyle = PlayerStyle(),
     style_b: PlayerStyle = PlayerStyle(),
+    territory_komi: Optional[float] = None,
 ) -> list[MatchResult]:
     """Plays `num_games` games between `checkpoint_a` and `checkpoint_b` and returns one
     `MatchResult` per game, from `checkpoint_a`'s perspective. Alternates which checkpoint
@@ -91,6 +92,12 @@ def play_match(
 
     `style_a`/`style_b` override one side's search budget and move selection (see
     `PlayerStyle`); the defaults leave both sides on the shared settings above.
+
+    `territory_komi`, when set, decides each game by Japanese-style territory scoring
+    (`engine.scoring.territory_score`, prisoners included) at that komi instead of area scoring
+    at `komi` -- the games themselves are played the same way, the nets searching with the area
+    `komi` they were trained on. Added 2026-10-23 so igo-app can re-fit its level ratings under
+    the territory scoring it now uses by default.
     """
     net_a = RayZeroPolicyValueNet(
         checkpoint_a,
@@ -115,17 +122,23 @@ def play_match(
         a_plays_black = game_index % 2 == 0
         black_mcts, white_mcts = (mcts_a, mcts_b) if a_plays_black else (mcts_b, mcts_a)
         black_style, white_style = (style_a, style_b) if a_plays_black else (style_b, style_a)
-        winner = _play_one_game(
-            black_mcts,
-            white_mcts,
-            board_size,
-            komi,
-            temperature,
-            temperature_drop_move,
-            rng,
-            black_style,
-            white_style,
-        )
+        if territory_komi is None:
+            winner = _play_one_game(
+                black_mcts,
+                white_mcts,
+                board_size,
+                komi,
+                temperature,
+                temperature_drop_move,
+                rng,
+                black_style,
+                white_style,
+            )
+        else:
+            end = play_game_to_end(
+                black_mcts, white_mcts, board_size, temperature, temperature_drop_move, rng, black_style, white_style
+            )
+            winner = territory_score(end.position, end.black_prisoners, end.white_prisoners).winner(territory_komi)
 
         if winner is None:
             score_a = 0.5

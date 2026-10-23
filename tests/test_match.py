@@ -66,6 +66,25 @@ class PlayMatchTest(unittest.TestCase):
             average_score_a = sum(r.score_a for r in results) / len(results)
             self.assertAlmostEqual(average_score_a, 0.5, delta=0.05)
 
+    def test_territory_scoring_also_averages_to_an_even_self_match(self) -> None:
+        # Same reasoning as above: deciding games by territory scoring mustn't introduce a
+        # color/perspective mixup either.
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint = Path(tmp) / "same.pt"
+            _save_untrained_checkpoint(checkpoint, seed=3)
+
+            results = play_match(
+                checkpoint,
+                checkpoint,
+                board_size=_BOARD_SIZE,
+                num_games=6,
+                num_simulations=_NUM_SIMULATIONS,
+                territory_komi=6.5,
+            )
+
+            self.assertEqual(6, len(results))
+            self.assertAlmostEqual(sum(r.score_a for r in results) / len(results), 0.5, delta=0.05)
+
     def test_temperature_makes_a_match_more_than_two_unique_games(self) -> None:
         # Before this fix (see eval/match.py's docstring and
         # docs/SELF_PLAY_STABILITY.md), temperature=0.0 (the default) meant every game
