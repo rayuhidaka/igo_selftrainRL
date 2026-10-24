@@ -1,0 +1,48 @@
+# Margin-aware training, stage 3's margin check (2026-10-24): does gen12m -- gen11 fine-tuned
+# on margin-aware self-play -- play for margin on its own, searching win/loss only the way
+# igo-app's search does? Same questions and settings as configs/eval_score_utility.yaml:
+#   - strength under both counts: "Per player" area and territory win rate of gen12m against
+#     gen11;
+#   - flips: [gen12m, gen12m]'s flip rate and share of close games against [gen11, gen11]'s;
+#   - margin when far ahead: each one's mean territory margin against Beginner.
+#
+#   python -m eval.rule_comparison --config configs/eval_score_utility_gen12m.yaml
+#
+# Pairings repeat so their games spread across workers; each repeat gets its own seed.
+
+board_size: 9
+num_games: 40
+num_simulations: 50
+temperature: 1.0
+temperature_drop_move: 16
+seed: 300
+
+area_komi: 7.5
+territory_komi: 6.5
+
+checkpoints:
+  gen11: checkpoints/bootstrap_option3_gen11_candidate.pt
+  gen12m: checkpoints/bootstrap_option3_gen12_margin_candidate.pt
+  beginner:
+    path: checkpoints/bootstrap_option3_gen1_candidate.pt
+    num_simulations: 8
+    temperature: 1.0
+
+pairings:
+  - [gen12m, gen11]
+  - [gen12m, gen11]
+  - [gen12m, gen11]
+  - [gen12m, gen11]
+  - [gen12m, gen12m]
+  - [gen12m, gen12m]
+  - [gen12m, gen12m]
+  - [gen11, gen11]
+  - [gen11, gen11]
+  - [gen11, gen11]
+  - [gen12m, beginner]
+  - [gen12m, beginner]
+  - [gen11, beginner]
+  - [gen11, beginner]
+
+out_dir: eval
+out_name: score_utility_gen12m_games.json

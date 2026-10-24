@@ -22,7 +22,7 @@ from bootstrap.model import RayZeroNet
 from engine.move import Pass, Play
 from engine.point import Point
 from mcts.mcts import Mcts, MctsConfig
-from selfplay.self_play import has_suspicious_mid_game_pass, play_one_game, visit_count_policy
+from selfplay.self_play import has_suspicious_mid_game_pass, play_one_game, search_config, visit_count_policy
 
 _BOARD_SIZE = 5
 _NUM_SIMULATIONS = 8
@@ -164,6 +164,16 @@ class PlayOneGameTest(unittest.TestCase):
 
         for _, policy_target, _ in records:
             self.assertEqual(0.0, policy_target[-1])
+
+
+class SearchConfigTest(unittest.TestCase):
+    def test_keys_left_out_fall_back_to_mcts_config_defaults(self) -> None:
+        self.assertEqual(MctsConfig(komi=6.5), search_config({}, komi=6.5))
+
+    def test_carries_the_score_utility_settings(self) -> None:
+        config = search_config({"num_simulations": 400, "score_utility_weight": 0.5, "score_utility_scale": 5.0}, 7.5)
+
+        self.assertEqual((400, 0.5, 5.0), (config.num_simulations, config.score_utility_weight, config.score_utility_scale))
 
 
 if __name__ == "__main__":

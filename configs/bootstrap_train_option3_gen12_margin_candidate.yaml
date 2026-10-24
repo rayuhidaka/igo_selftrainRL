@@ -1,0 +1,33 @@
+# Margin-aware training, stage 3 (2026-10-24): fine-tunes gen11 on its margin-aware self-play
+# (selfplay_self_play_option3_gen12_margin.yaml). The original gen12 mix, with the new games
+# at the usual dominant 0.70 share -- they're what carries the margin preference, so they
+# shouldn't be diluted the way the wider-window attempts diluted theirs. Same seed and 60s cap
+# as every gen12 attempt.
+
+board_size: 9
+seed: 12
+init_from_checkpoint: checkpoints/bootstrap_option3_gen11_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/bootstrap_option3_gen12_margin_candidate.pt
+data_source:
+  - path: selfplay_games/batch2.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_option3_gen10.npz
+    weight: 0.10
+  - path: selfplay_games/self_play_option3_gen11.npz
+    weight: 0.15
+  - path: selfplay_games/self_play_option3_gen12_margin.npz
+    weight: 0.70
+
+batch_size: 64
+learning_rate: 0.0002
+epochs: 1
+
+log_dir: runs
+run_name: bootstrap_option3_gen12_margin_candidate
+log_every_n_steps: 50
+checkpoint_interval_steps: 500
+
+max_train_seconds: 60

@@ -1,0 +1,25 @@
+# Margin-aware training, stage 3 (2026-10-24, igo-app's docs/ROADMAP.md): gen11's self-play
+# with the score bonus on (MctsConfig.score_utility_weight), so the recorded visit counts --
+# the next generation's policy targets -- prefer bigger margins, not just any win. 0.5 is the
+# weight stage 2 measured as free (52.6% vs plain gen11) with the biggest margin effect
+# (eval/README.md). Everything else is the original gen12 recipe
+# (selfplay_self_play_option3_gen12.yaml), with its own seed.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen11_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20261024
+
+num_games: 500
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+score_utility_weight: 0.5
+score_utility_scale: 10.0
+
+out_path: selfplay_games/self_play_option3_gen12_margin.npz

@@ -54,6 +54,13 @@ A hard structural guarantee against the Pass-collapse pattern (every collapse ob
 far happens at or below move 20; legitimate games never finish before move 42), rather
 than the probabilistic nudges above.
 
+`config["score_utility_weight"]`/`config["score_utility_scale"]` (default `0.0`/`10.0`,
+`MctsConfig`'s own defaults: win/loss only) make the search value margin as well as the win
+-- see `MctsConfig.score_utility_weight`'s docstring and igo-app's docs/ROADMAP.md
+(margin-aware training, 2026-10-24). Searching with the bonus alone didn't change how gen11
+plays between equals (eval/README.md), so self-play records the bonus-guided visit counts
+as policy targets for the next generation to learn from. Value targets stay win/loss.
+
 Usage:
     python -m selfplay.self_play --config configs/selfplay_self_play_smoke_test.yaml
 """
@@ -184,6 +191,21 @@ def play_one_game(
     return records, winner, final_area, final_ownership
 
 
+def search_config(config: dict, komi: float) -> MctsConfig:
+    """The `MctsConfig` a self-play `config` asks for, with `MctsConfig`'s own default for any
+    key it leaves out -- see this module's docstring for what each key is for."""
+    defaults = MctsConfig()
+    return MctsConfig(
+        num_simulations=config.get("num_simulations", defaults.num_simulations),
+        exploration_constant=config.get("exploration_constant", defaults.exploration_constant),
+        komi=komi,
+        root_dirichlet_alpha=config.get("root_dirichlet_alpha", defaults.root_dirichlet_alpha),
+        root_dirichlet_epsilon=config.get("root_dirichlet_epsilon", defaults.root_dirichlet_epsilon),
+        score_utility_weight=config.get("score_utility_weight", defaults.score_utility_weight),
+        score_utility_scale=config.get("score_utility_scale", defaults.score_utility_scale),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
@@ -211,14 +233,7 @@ def main() -> None:
         num_conv_layers=config.get("num_conv_layers"),
         num_residual_blocks=config.get("num_residual_blocks"),
     )
-    mcts_config = MctsConfig(
-        num_simulations=config.get("num_simulations", MctsConfig().num_simulations),
-        exploration_constant=config.get("exploration_constant", MctsConfig().exploration_constant),
-        komi=komi,
-        root_dirichlet_alpha=config.get("root_dirichlet_alpha", MctsConfig().root_dirichlet_alpha),
-        root_dirichlet_epsilon=config.get("root_dirichlet_epsilon", MctsConfig().root_dirichlet_epsilon),
-    )
-    mcts = Mcts(net, mcts_config)
+    mcts = Mcts(net, search_config(config, komi))
     rng = random.Random(config["seed"])
 
     all_planes: list[np.ndarray] = []
