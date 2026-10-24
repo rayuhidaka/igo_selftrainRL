@@ -90,3 +90,21 @@ but only 40 games each, so suggestive rather than proven. Flips and close games 
 players don't improve. The bonus can only reorder moves the policy already proposes, and a
 policy trained only to win rarely proposes margin moves — so a search-only change isn't enough
 to ship; the policy has to learn it (margin-aware self-play, stage 3).
+
+**Margin-aware generation, stage 3 (2026-10-24,** `run_option3_gen12_margin.sh`, margin check
+`configs/eval_score_utility_gen12m.yaml`, games in `eval/score_utility_gen12m_games.json`**):**
+gen12m is gen11 fine-tuned on 500 self-play games played with the score bonus at 0.5; in the
+margin check it searches win/loss only, as igo-app does.
+
+| | gen11 | gen12m |
+|---|---|---|
+| field gate (round-robin Elo) | 2231.6 | 2184.2 — FAIL |
+| head-to-head vs gen11 (157 games, area / territory) | — | 53.5 % / 51.6 % (±7.8 %) |
+| self-play flips | 8 / 118 (6.8 %) | 6 / 116 (5.2 %) |
+| self-play games within 2.5 points | 25.4 % | 26.7 % |
+| vs Beginner: win rate, territory margin | 98.8 %, 19.1 | 92.5 %, 17.5 |
+
+No margin play learned: flips and close games are within noise of gen11's, margins against
+Beginner went down, and the candidate is weaker against the field. Its opening policy spread
+out (tengen 0.91 → 0.52). One fine-tune at this recipe's 60-second cap, with win/loss value
+targets, doesn't carry the bonus's preference into the net.

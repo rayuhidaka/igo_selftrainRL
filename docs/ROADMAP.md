@@ -1049,3 +1049,9 @@ scheduling, session length) is still to be decided — revisit when Phase
       (`eval/README.md`): no strength cost up to weight 0.5, margins against Beginner up
       somewhat, but flips and close games between equal players unchanged — the policy has
       to learn margin play, so next is stage 3, a margin-aware self-play generation.
+
+      **2026-10-24, stage 3 failed:** gen12m (500 self-play games with the bonus at 0.5,
+      original gen12 mix) fails the field gate (2184.2 vs gen11 2231.6) and shows no margin
+      play — flips 5.2 % vs 6.8 % and close games 26.7 % vs 25.4 % in self-play (within
+      noise), margin against Beginner down (17.5 vs 19.1). Detail in `eval/README.md`. Not
+      shipped; next step undecided (see igo-app's roadmap).
