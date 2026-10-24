@@ -1041,3 +1041,11 @@ scheduling, session length) is still to be decided — revisit when Phase
       territory scoring as the self-play reward. igo-app ships Japanese scoring on the
       current nets meanwhile (decided 2026-10-23), with the level ratings re-fit under
       territory counting.
+
+      **2026-10-24, stages 0-2 done:** gen11's score head predicts the real final margin
+      well enough to steer by (r = 0.70 on 105k held-out positions, MAE 7.7 points,
+      calibration monotonic but shrunk by a third). `MctsConfig.score_utility_weight` adds
+      the bonus to the search (off by default). gen11 searching with it, no retraining
+      (`eval/README.md`): no strength cost up to weight 0.5, margins against Beginner up
+      somewhat, but flips and close games between equal players unchanged — the policy has
+      to learn margin play, so next is stage 3, a margin-aware self-play generation.

@@ -73,3 +73,20 @@ gives away exactly that many points under territory scoring.
 pass rule ("pass after the opponent's pass once nothing is left open") was tried and dropped:
 it needs a list of dead stones, and the nets can't supply one when a side is far ahead (it
 doesn't bother capturing). See docs/ROADMAP.md's "Margin-aware training".
+
+**Score bonus in the search, no retraining (2026-10-24,** `configs/eval_score_utility.yaml`,
+games in `eval/score_utility_games.json`**):** gen11 at `score_utility_weight` 0.1 / 0.25 / 0.5,
+50 simulations, 936 finished games.
+
+| | vs gen11 (area win, ~155 games) | vs Beginner: margin area / territory | wins by ≤ 2.5 vs Beginner | self-play flips |
+|---|---|---|---|---|
+| gen11 | — | 9.1 / 19.0 | 17.5 % | 2 / 76 |
+| weight 0.1 | 48.7 % | 8.7 / 18.5 | 15.8 % | 6 / 77 |
+| weight 0.25 | 51.0 % | 9.6 / 21.6 | 18.4 % | 3 / 78 |
+| weight 0.5 | 52.6 % | 10.9 / 22.0 | 7.9 % | 6 / 80 |
+
+No strength cost at any weight (±8 % at 95 %). Margins against Beginner grow with the weight,
+but only 40 games each, so suggestive rather than proven. Flips and close games between equal
+players don't improve. The bonus can only reorder moves the policy already proposes, and a
+policy trained only to win rarely proposes margin moves — so a search-only change isn't enough
+to ship; the policy has to learn it (margin-aware self-play, stage 3).
