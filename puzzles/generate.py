@@ -67,6 +67,12 @@ class TreeTooBig(Exception):
     """The reply tree went over `--max-nodes`."""
 
 
+class Unclear(Exception):
+    """A move the player can make is neither a proven win nor a proven loss (seki, ko, or a
+    fight longer than the reader's depth). Calling it wrong would be unfair, so the puzzle is
+    dropped. Found by igo-app's PuzzlesTest on the first run (2026-11-19)."""
+
+
 def parse_board(rows: list[str], to_play: Stone) -> Position:
     return Position(board_size=len(rows), stones=[SYMBOLS[c] for c in "".join(rows)], to_play=to_play)
 
@@ -169,8 +175,26 @@ def build_tree(fight: Fight, position: Position, depth: int, counter: list[int],
                     "next": build_tree(fight, after.play(reply), depth - 2, counter, max_nodes),
                 }
         else:
+            if not fight.mover_wins(after, depth - 1):
+                raise Unclear()  # not a proven win, and not a proven loss either
             bad[key(move)] = refutation(fight, after, depth - 1)
     return {"good": good, "bad": bad}
+
+
+def recheck(fight: Fight, position: Position, node: dict, depth: int = EYE_SPACE_DEPTH) -> None:
+    """Re-walks an existing tree and raises `Unclear` where a wrong move isn't a proven loss
+    (the check `build_tree` now makes as it goes) -- for files made before it existed."""
+    if node.get("solved"):
+        return
+    for move in [*fight.moves(position), Pass()]:
+        after = position.play(move)
+        step = node["good"].get(key(move))
+        if step is not None:
+            if "next" in step:
+                reply = Pass() if step["reply"] == "pass" else Play(Point(*step["reply"]))
+                recheck(fight, after.play(reply), step["next"], depth - 2)
+        elif not fight.mover_wins(after, depth - 1):
+            raise Unclear()
 
 
 def nothing_better_than_pass(fight: Fight, position: Position, depth: int) -> bool:
@@ -306,6 +330,9 @@ def main() -> None:
                 tree = build_tree(fight, position, EYE_SPACE_DEPTH, [0], args.max_nodes)
             except TreeTooBig:
                 stats["tree too big"] += 1
+                continue
+            except Unclear:
+                stats["unclear move"] += 1
                 continue
             except BudgetExceeded:
                 stats["over budget"] += 1
