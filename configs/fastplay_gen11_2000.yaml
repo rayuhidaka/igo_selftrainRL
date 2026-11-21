@@ -1,0 +1,22 @@
+# Data for the bigger net's distillation (docs/STRONGER_NET.md, step 3): 2000 more games of
+# gen11 self-play with gen12's recipe, by fastplay (~1100 games an hour on the RTX 3050).
+# Same settings as configs/fastplay_benchmark_gen11.yaml, other seed.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen11_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20261123
+
+num_games: 2000
+parallel_games: 128
+device: auto
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/fastplay_gen11_2000.npz

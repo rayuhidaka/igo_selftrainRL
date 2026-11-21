@@ -1,0 +1,57 @@
+# Bigger net, step 3 of docs/STRONGER_NET.md: a fresh 10 blocks x 128 channels net (gen11 is
+# 6 x 96, ~2.4x less compute per evaluation) distilled from the existing self-play games,
+# newest and strongest weighted most. Phase 2 of 2: continues phase 1
+# at lr 2e-4. fastplay_benchmark_gen11.npz is
+# held out to check for overfitting. Goal: match gen11 on the parent match and field gate;
+# real gains have to come from self-play afterwards.
+
+board_size: 9
+seed: 1013
+init_from_checkpoint: checkpoints/big10x128_distill_phase1.pt
+channels: 128
+num_residual_blocks: 10
+use_global_pooling: true
+has_score_head: true
+has_ownership_head: true
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/big10x128_distill_phase2.pt
+data_source:
+  - path: selfplay_games/fastplay_gen11_2000.npz          # gen11, 2000 games
+    weight: 0.36
+  - path: selfplay_games/self_play_option3_gen12.npz       # gen11's games, CPU self-play
+    weight: 0.08
+  - path: selfplay_games/self_play_option3_gen12_extra500.npz
+    weight: 0.08
+  - path: selfplay_games/self_play_option3_gen12_800sims.npz
+    weight: 0.08
+  - path: selfplay_games/self_play_option3_gen12_margin.npz
+    weight: 0.04
+  - path: selfplay_games/self_play_option3_gen11.npz       # gen10's games
+    weight: 0.07
+  - path: selfplay_games/self_play_option3_gen10.npz
+    weight: 0.06
+  - path: selfplay_games/self_play_option3_gen9.npz
+    weight: 0.05
+  - path: selfplay_games/self_play_option3_gen8.npz
+    weight: 0.03
+  - path: selfplay_games/self_play_option3_gen7.npz
+    weight: 0.03
+  - path: selfplay_games/self_play_option3_gen6.npz
+    weight: 0.03
+  - path: selfplay_games/self_play_option3_gen5.npz
+    weight: 0.03
+  - path: selfplay_games/batch2.npz
+    weight: 0.06
+
+batch_size: 256
+learning_rate: 0.0002
+epochs: 1000
+
+log_dir: runs
+run_name: big10x128_distill_phase2
+log_every_n_steps: 200
+checkpoint_interval_steps: 2000
+
+max_train_seconds: 1200
