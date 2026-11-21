@@ -12,7 +12,7 @@ from engine.move import Move, Pass, Play
 from engine.point import Point
 from engine.position import Position
 from engine.stone import Stone
-from mcts.dead_stone_estimator import DeadStoneEstimator, PlayoutConfig
+from mcts.dead_stone_estimator import DeadStoneEstimator, PlayoutConfig, is_settled
 from mcts.policy_value_net import Evaluation
 
 
@@ -52,8 +52,24 @@ class DeadStoneEstimatorTest(unittest.TestCase):
     def test_stones_the_playouts_capture_are_proposed_dead(self) -> None:
         self.assertEqual({Point(1, 2)}, DeadStoneEstimator(_ScriptedNet(_CAPTURE), _DETERMINISTIC).estimate(_DEAD_BLACK_STONE))
 
-    def test_when_nobody_captures_nothing_is_proposed_dead(self) -> None:
-        self.assertEqual(set(), DeadStoneEstimator(_ScriptedNet(Pass()), _DETERMINISTIC).estimate(_DEAD_BLACK_STONE))
+    def test_without_cleanup_when_nobody_captures_nothing_is_proposed_dead(self) -> None:
+        config = dataclasses.replace(_DETERMINISTIC, cleanup=False)
+        self.assertEqual(set(), DeadStoneEstimator(_ScriptedNet(Pass()), config).estimate(_DEAD_BLACK_STONE))
+
+    def test_cleanup_makes_a_net_that_would_rather_pass_capture_the_dead_stone(self) -> None:
+        self.assertEqual({Point(1, 2)}, DeadStoneEstimator(_ScriptedNet(Pass()), _DETERMINISTIC).estimate(_DEAD_BLACK_STONE))
+
+    def test_cleanup_never_fills_an_eye_of_a_living_group(self) -> None:
+        config = dataclasses.replace(_DETERMINISTIC, max_moves=2)
+        end = DeadStoneEstimator(_ScriptedNet(Play(Point(0, 1))), config).play_out(_DEAD_BLACK_STONE)
+        self.assertEqual(Stone.EMPTY, end.stone_at(Point(1, 2)))
+        self.assertEqual(Stone.EMPTY, end.stone_at(Point(0, 1)))
+        self.assertEqual(Stone.EMPTY, end.stone_at(Point(4, 3)))
+
+    def test_is_settled(self) -> None:
+        self.assertTrue(is_settled(_board("X.XO.", "XXXOO", ".XXO.", "XXOOO", "X.XOO")))
+        self.assertFalse(is_settled(_board("X.XO.", "XX.OO", "XX.OO", "XX.OO", "X.XO.")))
+        self.assertFalse(is_settled(_DEAD_BLACK_STONE))
 
     def test_a_playout_stops_at_the_move_limit(self) -> None:
         # Black passes, white captures: with a limit of two moves the playout stops there.

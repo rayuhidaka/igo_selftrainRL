@@ -4,8 +4,9 @@ the position out a few times with a quick search and seeing which stones end up 
 Known blind spot (found 2026-10-23, igo-app's scoring overhaul stage C): every Ray-zeroGo net
 was trained only to win, never to win by more, so a side far ahead doesn't bother capturing
 dead stones -- in its playouts or in its own games -- and those stones aren't proposed. The
-nets' ownership heads, trained on the same endings, share it. Close games, where it matters for
-the result, are fine. Margin-aware training is the fix (see docs/ROADMAP.md).
+nets' ownership heads, trained on the same endings, share it. Fixed 2026-11-21 by cleanup
+playouts (`PlayoutConfig.cleanup`): while the board isn't settled a playout neither passes nor
+fills its own area, so the stones have to be taken off.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ from engine.life_and_death import estimate_dead_stones
 from engine.move import Move, Pass
 from engine.point import Point
 from engine.position import Position
+from engine.scoring import is_own_territory_fill, territory_ownership
+from engine.stone import Stone
 from mcts.mcts import Mcts, MctsConfig
 from mcts.policy_value_net import PolicyValueNet
 
@@ -33,6 +36,16 @@ class PlayoutConfig:
     """`None` means a third of the board's points."""
     move_temperature: float = 0.5
     komi: float = 7.5
+    cleanup: bool = True
+    """While the board isn't settled (`is_settled`), neither pass nor fill your own area (eyes
+    included); pass only once no other placement is left."""
+
+
+def is_settled(position: Position) -> bool:
+    """Port of `Scoring.kt`'s `isSettled`: every empty point counts for exactly one color -- no
+    dame, and no stone inside the other color's area."""
+    ownership = territory_ownership(position)
+    return all(ownership[point] is not None for point in ownership if position.stone_at(point) == Stone.EMPTY)
 
 
 class DeadStoneEstimator:
@@ -55,7 +68,10 @@ class DeadStoneEstimator:
         current = dataclasses.replace(position, pass_count=0)
         moves = 0
         while current.pass_count < 2 and moves < max_moves:
-            current = current.play(self._choose(self._mcts.search(current).move_visits))
+            visits = self._mcts.search(current).move_visits
+            if self._config.cleanup and not is_settled(current):
+                visits = {m: v for m, v in visits.items() if not isinstance(m, Pass) and not is_own_territory_fill(current, m.point)}
+            current = current.play(self._choose(visits))
             moves += 1
         return current
 
