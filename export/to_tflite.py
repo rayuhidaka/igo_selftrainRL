@@ -117,6 +117,7 @@ def convert(
     has_score_head: bool | None = None,
     use_global_pooling: bool | None = None,
     has_ownership_head: bool | None = None,
+    float16: bool = False,
 ) -> bytes:
     # channels/num_conv_layers/num_residual_blocks/has_score_head/use_global_pooling/
     # has_ownership_head only need supplying for a legacy checkpoint (saved before
@@ -149,9 +150,12 @@ def convert(
                 output_folder_path=str(saved_model_dir),
             )
 
-        candidates = list(saved_model_dir.glob("*_float32.tflite"))
+        # onnx2tf writes both; float16 stores the weights at half precision (half the file) and
+        # dequantizes them to float32 at load, so inference still runs in float32.
+        precision = "float16" if float16 else "float32"
+        candidates = list(saved_model_dir.glob(f"*_{precision}.tflite"))
         if not candidates:
-            raise RuntimeError(f"onnx2tf did not produce a float32 .tflite in {saved_model_dir}")
+            raise RuntimeError(f"onnx2tf did not produce a {precision} .tflite in {saved_model_dir}")
         tflite_bytes = candidates[0].read_bytes()
 
     tflite_bytes = rename_io_tensors(
@@ -186,6 +190,9 @@ def main() -> None:
     parser.add_argument(
         "--has-ownership-head", type=bool, default=None, help="Only needed for a legacy checkpoint or to override"
     )
+    parser.add_argument(
+        "--float16", action="store_true", help="Store the weights at half precision (half the file size)"
+    )
     args = parser.parse_args()
 
     tflite_bytes = convert(
@@ -198,6 +205,7 @@ def main() -> None:
         args.has_score_head,
         args.use_global_pooling,
         args.has_ownership_head,
+        args.float16,
     )
     print(f"Wrote {args.out} ({len(tflite_bytes)} bytes)")
 
