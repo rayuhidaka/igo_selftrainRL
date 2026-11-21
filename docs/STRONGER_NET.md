@@ -111,6 +111,43 @@ graphs) or a second process. A 10x128 net (~2.4-3x gen11's compute) should still
 `cleanup_labels` (fastplay/README.md); not used for training yet. Not supported:
 `score_utility_weight`.
 
+## First 10x128 net: distilled (2026-11-22)
+
+`run_big10x128_distill.sh`: 2000 new gen11 games by fastplay (1 h 44 min), then a fresh
+10 blocks x 128 channels net trained on them and on the older self-play
+(`configs/bootstrap_train_big10x128_distill*.yaml`; fastplay games weighted 0.36, gen11's CPU
+games 0.28, gen9-gen11's 0.18, older 0.18) for 60 min at lr 1e-3 and 20 min at 2e-4 on the
+RTX 3050.
+
+Held-out losses on fastplay's 512 benchmark games (`bootstrap/holdout_loss.py`, in no
+checkpoint's training data):
+
+| Checkpoint | Policy | Value |
+|---|---|---|
+| gen11 | 2.593 | 0.429 |
+| gen12 (trained on gen11's games) | 2.565 | 0.378 |
+| 10x128 phase 1, step 16000 | 2.563 | 0.373 |
+| 10x128 phase 1 end (step 35699) | 2.546 | 0.407 |
+| 10x128 phase 2 end | 2.514 | 0.400 |
+
+The policy kept improving; the value overfit in phase 1's second half (0.373 -> 0.407) on ~7000
+games. Next time: a shorter phase 1, or a held-out check that keeps the best checkpoint.
+
+Parent match (`eval.promote`, 80 games at 50 sims, equal sims for both): **1560 vs 1440 for
+gen11, +121 Elo, PROMOTE.** At equal simulations a 10x128 move costs ~2.4x gen11's on a phone.
+
+Field gate (`eval/gate_big1_*`, 40 games per pairing at 50 sims, alias `big1`): **PASS, top of
+the field at 2284** (gen11 2240, gen10 2219, gen12 2174). It's the first checkpoint to rate above
+gen11 there; every gen12 attempt fell below it. It beat every checkpoint: gen11 28-12, gen12
+24-16, gen9-gen10 31-9 and 33-7, older ones 30-36 of 40 (gen1 10 wins, the most of any old one).
+Against the field the gap is +44, against gen11 head-to-head +121.
+
+So more capacity alone, distilled from gen11-level games, already passes where 6x96 stopped.
+Open: the phone check (`igo-app`'s `ParallelSearchOnDeviceTest` with this net: at 800 sims on 4
+threads the untrained 10x128 took ~1.5 s on the emulator); whether float16 export keeps it
+(12 MB float32 vs gen11's 4.2 MB); then the self-play chain from big1 with fastplay
+(`cleanup_labels` on), the field gate deciding each step.
+
 ## Self-play diversity (checked 2026-11-21)
 
 Question from the publisher: did gen11 learn little because its self-play games were too alike
