@@ -977,8 +977,8 @@ scheduling, session length) is still to be decided — revisit when Phase
       longer training, a wider data window, deeper search — produce a
       candidate that beats gen11 head-to-head but not overall. gen11 looks
       like the ceiling of this setup (6 blocks / 96 channels). Results in
-      `eval/gate_gen12s_*.json`. Next step pending the user: hold at
-      gen11, or a bigger lever (e.g. a larger net).
+      `eval/gate_gen12s_*.json`. **Decided 2026-11-21: a bigger net, after
+      fast GPU self-play — plan in `docs/STRONGER_NET.md`.**
 - [x] **Round-robin tournament for real, cross-generation Elo reference
       points — done 2026-09-23.** `eval/round_robin.py` (new): all 9
       Option 3 generations + the pristine baseline played every other
@@ -1055,3 +1055,10 @@ scheduling, session length) is still to be decided — revisit when Phase
       play — flips 5.2 % vs 6.8 % and close games 26.7 % vs 25.4 % in self-play (within
       noise), margin against Beginner down (17.5 vs 19.1). Detail in `eval/README.md`. Not
       shipped; next step undecided (see igo-app's roadmap).
+
+## Next — fast self-play and a bigger net (decided 2026-11-21)
+
+Players beat igo-app's Level 10 (gen11). Plan, profile, design and the decisions taken with the
+publisher are in `docs/STRONGER_NET.md`: GPU-batched self-play with a fast rules engine, then a
+bigger net warm-started from the existing games, self-play endings labelled with the cleanup
+rule, and (agreed, later) a self-play temperature schedule experiment.
