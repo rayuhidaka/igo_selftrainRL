@@ -31,10 +31,14 @@ evaluation 2-3x slower, so continuing on the CPU would mean days per generation.
    has to come from continued self-play with the extra capacity. Candidate size: 10 blocks /
    128 channels (~3x gen11's compute per evaluation); check on-device speed before committing.
 4. **Correct ownership labels in self-play.** Self-play games end with dead stones still on the
-   board when one side is far ahead (the nets only play to win), so the ownership targets call
-   them alive. Use the same cleanup rule as `igo-app`'s dead-stone playouts (2026-11-21): after
-   both players pass on an unsettled board, play on without passing or filling your own area
-   until it's settled, and score that. Only the labels change; the game result stays the same.
+   board — far ahead or not (80 close gen12 endings held 407 dead stones by a deep reference,
+   their labels only 33) — so the ownership targets call them alive. Use igo-app's cleanup rule
+   (2026-11-21, `mcts/dead_stone_estimator.py`'s `is_cleanup_move`): after both players pass
+   on an unsettled board, play on, passing only when no move in a contested region is left
+   (never in your own area, never inside the other side's territory, never a self-atari), and
+   label from that end. Only the labels change; the game result stays the same. Don't use the
+   first version of the rule, which also allowed plays in the other side's territory: both
+   sides then filled each other's eyes and living groups died.
 
 ## gen11's ownership head (checked 2026-11-21)
 
@@ -47,8 +51,9 @@ recall at ~60%. Part of the cause is the labels: self-play endings between a far
 a lost one leave dead stones on the board, which the final position then counts as alive. That
 is what the cleanup labelling in step 4 above fixes.
 
-igo-app instead fixed its dead-stone proposal with cleanup playouts (same rule, applied to the
-playouts): on 24 lopsided gen11-vs-gen5 endings, 291 of 375 dead stones found vs 10 before.
+igo-app instead fixed its dead-stone proposal with cleanup playouts (the rule in step 4, applied
+to the playouts). Against a deep reference: 80 close self-play endings, 396 of 407 dead stones
+found vs 45 before, 2 false alarms either way; 14 lopsided gen11-vs-gen5 endings, 74 of 97 vs 2.
 
 ## Where self-play time goes (profile, 2026-11-21)
 

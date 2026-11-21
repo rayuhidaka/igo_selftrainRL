@@ -5,8 +5,8 @@ Known blind spot (found 2026-10-23, igo-app's scoring overhaul stage C): every R
 was trained only to win, never to win by more, so a side far ahead doesn't bother capturing
 dead stones -- in its playouts or in its own games -- and those stones aren't proposed. The
 nets' ownership heads, trained on the same endings, share it. Fixed 2026-11-21 by cleanup
-playouts (`PlayoutConfig.cleanup`): while the board isn't settled a playout neither passes nor
-fills its own area, so the stones have to be taken off.
+playouts (`PlayoutConfig.cleanup`): while the board isn't settled a playout may not pass while it
+has a move in a contested region (`is_cleanup_move`), so the stones have to be taken off.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from engine.life_and_death import estimate_dead_stones
-from engine.move import Move, Pass
+from engine.move import Move, Pass, Play
 from engine.point import Point
 from engine.position import Position
 from engine.scoring import is_own_territory_fill, territory_ownership
@@ -37,8 +37,33 @@ class PlayoutConfig:
     move_temperature: float = 0.5
     komi: float = 7.5
     cleanup: bool = True
-    """While the board isn't settled (`is_settled`), neither pass nor fill your own area (eyes
-    included); pass only once no other placement is left."""
+    """While the board isn't settled (`is_settled`), don't pass while a move in a contested region
+    is left (`is_cleanup_move`); pass once none is."""
+
+
+def is_self_atari(position: Position, point: Point) -> bool:
+    """Port of `Tactics.kt`'s `isSelfAtari`: playing `point` leaves the mover's chain with at most
+    one liberty and captures nothing."""
+    after = position.play(Play(point))
+    opponent = position.to_play.opponent()
+    if after.stones.count(opponent) < position.stones.count(opponent):
+        return False
+    board = list(after.stones)
+    return len(after._liberties(after._group_at(point, board), board)) <= 1
+
+
+def is_cleanup_move(position: Position, move: Move) -> bool:
+    """A cleanup playout's allowed move (`DeadStoneEstimator.kt`'s `cleanupMove`): a placement in
+    a contested region -- not filling its own area, not inside the other side's territory -- that
+    isn't a self-atari. Allowing plays in the other side's territory too had both sides fill each
+    other's eyes once nothing else was left, killing living groups (2026-11-21)."""
+    if isinstance(move, Pass):
+        return False
+    if is_own_territory_fill(position, move.point):
+        return False
+    if territory_ownership(position)[move.point] == position.to_play.opponent():
+        return False
+    return not is_self_atari(position, move.point)
 
 
 def is_settled(position: Position) -> bool:
@@ -70,7 +95,7 @@ class DeadStoneEstimator:
         while current.pass_count < 2 and moves < max_moves:
             visits = self._mcts.search(current).move_visits
             if self._config.cleanup and not is_settled(current):
-                visits = {m: v for m, v in visits.items() if not isinstance(m, Pass) and not is_own_territory_fill(current, m.point)}
+                visits = {m: v for m, v in visits.items() if is_cleanup_move(current, m)}
             current = current.play(self._choose(visits))
             moves += 1
         return current

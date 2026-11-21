@@ -66,6 +66,13 @@ class DeadStoneEstimatorTest(unittest.TestCase):
         self.assertEqual(Stone.EMPTY, end.stone_at(Point(0, 1)))
         self.assertEqual(Stone.EMPTY, end.stone_at(Point(4, 3)))
 
+    def test_cleanup_fills_dame_rather_than_playing_inside_the_other_sides_territory(self) -> None:
+        board = _board("XX.OO", "X.XOO", "XXXO.", "X.XO.", "XXXOO")
+        config = dataclasses.replace(_DETERMINISTIC, max_moves=1)
+        end = DeadStoneEstimator(_ScriptedNet(Play(Point(2, 4))), config).play_out(board)
+        self.assertEqual(Stone.BLACK, end.stone_at(Point(0, 2)))
+        self.assertEqual(Stone.EMPTY, end.stone_at(Point(2, 4)))
+
     def test_is_settled(self) -> None:
         self.assertTrue(is_settled(_board("X.XO.", "XXXOO", ".XXO.", "XXOOO", "X.XOO")))
         self.assertFalse(is_settled(_board("X.XO.", "XX.OO", "XX.OO", "XX.OO", "X.XO.")))
