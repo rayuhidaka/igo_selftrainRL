@@ -75,6 +75,24 @@ class BoardTest(unittest.TestCase):
             if i % 10 == 0:  # the generator's board changes in place, so check it as it's yielded
                 np.testing.assert_array_equal(board.encode(), encode_planes(position).numpy())
 
+    def test_cleanup_moves_match_dead_stone_estimator(self) -> None:
+        from mcts.dead_stone_estimator import is_cleanup_move, is_settled
+
+        checked = settled = 0
+        for size, games in ((9, 12), (5, 60)):
+            for i, (position, board) in enumerate(_random_games(size, games, seed=50 + size, pass_rate=0.0)):
+                if i % 3:
+                    continue
+                expected = np.zeros(size * size + 1, dtype=np.uint8)
+                for move in position.legal_moves():
+                    expected[move_index(move, size)] = is_cleanup_move(position, move)
+                np.testing.assert_array_equal(board.cleanup_mask(), expected)
+                self.assertEqual(board.is_settled(), is_settled(position))
+                checked += 1
+                settled += is_settled(position)
+        self.assertGreater(checked, 500)
+        self.assertGreater(settled, 0)
+
     def test_ko_is_found_like_the_python_engine(self) -> None:
         # Black captures the white stone at (2,2) by playing (2,3): a ko, so white may not retake at once.
         position = Position.empty(5)
@@ -88,6 +106,18 @@ class BoardTest(unittest.TestCase):
         self.assertEqual(board.ko, position.ko_point.to_index(5))
         with self.assertRaises(ValueError):
             board.copy().play(board.ko)
+
+
+class CleanupMoveTest(unittest.TestCase):
+    def test_most_visited_allowed_move_prior_breaking_ties(self) -> None:
+        from fastplay.self_play import cleanup_move
+
+        visits = np.array([9, 3, 3, 0, 20])  # 4 points, then the pass
+        priors = np.array([0.1, 0.2, 0.3, 0.1, 0.3])
+        self.assertEqual(cleanup_move(visits, priors, np.array([0, 1, 1, 1, 0], dtype=np.uint8)), 2)
+        self.assertEqual(cleanup_move(visits, priors, np.array([1, 1, 1, 1, 0], dtype=np.uint8)), 0)
+        self.assertEqual(cleanup_move(visits, priors, np.array([0, 0, 0, 1, 0], dtype=np.uint8)), 3)
+        self.assertEqual(cleanup_move(visits, priors, np.zeros(5, dtype=np.uint8)), 4)
 
 
 class _PlanesNet:

@@ -16,3 +16,12 @@ once, so a bigger net can be trained in days instead of weeks.
 captures, ko and the board after every move of random games on 3x3, 5x5 and 9x9; area scores
 and ownership; the net's input planes; and the search's visit counts against `Mcts` with the
 same (fake) net, with and without root noise. Change the rules or the search in both places.
+
+`cleanup_labels: true` (step 4 of `docs/STRONGER_NET.md`) plays a game that ends on an unsettled
+board on with the cleanup rule (`fg_cleanup_mask`, tested equal to
+`mcts/dead_stone_estimator.py`'s `is_cleanup_move`) and takes the ownership targets from where
+that ends; the result and the value and score targets stay those of the real end. Smoke test
+(gen11, 100 sims, 32 games): 30 ended unsettled, 15.6 points a game changed owner; by eye the
+stones removed were dead (in atari inside the other side's area, eyeless groups). Games that
+ended by two early passes on an open board can reach the cap (a third of the points in moves)
+still unsettled.

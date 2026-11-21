@@ -8,6 +8,15 @@ selfplay/self_play.py and take the same config keys, plus:
 
 - `parallel_games` (default 128): games in flight at once, the net's batch size.
 - `device` (default "auto"): "cuda" when available, else "cpu".
+- `cleanup_labels` (default false): docs/STRONGER_NET.md's step 4. When a game ends on an
+  unsettled board, play it on with the cleanup rule (mcts/dead_stone_estimator.py's
+  `is_cleanup_move`: only moves in contested regions, never filling your own area or playing
+  inside the other side's, never a self-atari; pass when none is left) until two passes, a
+  settled board or a third of the board's points in moves, and take the ownership targets from
+  there. Each cleanup move is the most visited allowed move (prior breaks ties) of a search
+  of `cleanup_simulations` (default `num_simulations`) without root noise. The game's result,
+  and so the value and score targets, stay those of the real end, and cleanup positions
+  aren't recorded.
 
 `score_utility_weight` isn't supported (the margin-aware experiment is paused).
 
@@ -58,6 +67,9 @@ class Game:
     board: Board
     moves: int = 0
     records: list[tuple[np.ndarray, np.ndarray, int]] = field(default_factory=list)
+    end: Board | None = None
+    """The board where the game really ended, once it's being cleaned up (`cleanup_labels`)."""
+    cleanup_moves: int = 0
 
 
 class BatchedNet:
@@ -74,9 +86,19 @@ class BatchedNet:
         return policy.float().cpu().numpy(), value[:, 0].float().cpu().numpy()
 
 
+def cleanup_move(visits: np.ndarray, priors: np.ndarray, allowed: np.ndarray) -> int:
+    """The most visited `allowed` move, the higher prior breaking ties; the pass (last index)
+    when none is allowed."""
+    if not allowed.any():
+        return len(allowed) - 1
+    return int(np.argmax(np.where(allowed > 0, visits + priors, -1.0)))
+
+
 def finish(game: Game, komi: float, size: int) -> dict:
-    """The training rows of a finished game (self_play.py's main loop, per game)."""
-    black, white = game.board.area_score()
+    """The training rows of a finished game (self_play.py's main loop, per game). The result
+    comes from where the game ended, the ownership from where its cleanup ended, if any."""
+    end = game.end if game.end is not None else game.board
+    black, white = end.area_score()
     black_margin = black - (white + komi)
     winner = BLACK if black_margin > 0 else WHITE if black_margin < 0 else None
     owner = game.board.ownership()
@@ -89,7 +111,8 @@ def finish(game: Game, komi: float, size: int) -> dict:
         rows["score"].append(margin / (size * size))
         opponent = WHITE if to_play == BLACK else BLACK
         rows["ownership"].append(np.where(owner == to_play, 1.0, np.where(owner == opponent, -1.0, 0.0)).astype(np.float32))
-    return {"rows": rows, "winner": winner, "moves": game.moves}
+    relabelled = 0 if game.end is None else int((end.ownership() != owner).sum())
+    return {"rows": rows, "winner": winner, "moves": game.moves, "relabelled": relabelled}
 
 
 def run(config: dict, log=print) -> SelfPlayExamples:
@@ -109,6 +132,9 @@ def run(config: dict, log=print) -> SelfPlayExamples:
     max_moves = config["max_moves"]
     min_moves = config.get("min_moves_to_keep", 0)
     max_pass_weight = config.get("max_mid_game_pass_weight")
+    cleanup_labels = config.get("cleanup_labels", False)
+    cleanup_sims = config.get("cleanup_simulations", sims)
+    cleanup_cap = size * size // 3
     num_games = config["num_games"]
     parallel = min(config.get("parallel_games", 128), num_games)
     device = config.get("device", "auto")
@@ -124,13 +150,16 @@ def run(config: dict, log=print) -> SelfPlayExamples:
     slots: list[Game | None] = [Game(Board.empty(size)) for _ in range(parallel)]
     started = parallel
     out = {"planes": [], "policy": [], "value": [], "score": [], "ownership": []}
-    played = discarded_short = discarded_pass = 0
+    played = discarded_short = discarded_pass = cleaned = relabelled = 0
     start = time.time()
     evaluations = 0
 
     while any(slots):
         for i, game in enumerate(slots):
             if game is None:
+                continue
+            if game.end is not None:
+                pool.begin(i, game.board, cleanup_sims, c_puct, komi)
                 continue
             noise = None
             if epsilon > 0:
@@ -150,18 +179,28 @@ def run(config: dict, log=print) -> SelfPlayExamples:
             if game is None:
                 continue
             visits, _ = pool.root_visits(i)
-            considered = game.board.legal_mask().astype(np.float32)
-            if no_pass_before is not None and game.moves < no_pass_before:
-                visits = visits.copy()
-                visits[points] = 0
-                considered[points] = 0
-            target = visit_policy(visits, considered)
-            game.records.append((game.board.encode(), target, game.board.to_play))
-            effective = temperature if temperature_drop is None or game.moves < temperature_drop else 0.0
-            game.board.play(sample_index(target, effective, rng))
-            game.moves += 1
-            if game.board.pass_count < 2 and game.moves < max_moves:
-                continue
+            if game.end is not None:
+                game.board.play(cleanup_move(visits, pool.root_priors(i), game.board.cleanup_mask()))
+                game.cleanup_moves += 1
+                if game.board.pass_count < 2 and game.cleanup_moves < cleanup_cap and not game.board.is_settled():
+                    continue
+            else:
+                considered = game.board.legal_mask().astype(np.float32)
+                if no_pass_before is not None and game.moves < no_pass_before:
+                    visits = visits.copy()
+                    visits[points] = 0
+                    considered[points] = 0
+                target = visit_policy(visits, considered)
+                game.records.append((game.board.encode(), target, game.board.to_play))
+                effective = temperature if temperature_drop is None or game.moves < temperature_drop else 0.0
+                game.board.play(sample_index(target, effective, rng))
+                game.moves += 1
+                if game.board.pass_count < 2 and game.moves < max_moves:
+                    continue
+                if cleanup_labels and not game.board.is_settled():
+                    game.end = game.board.copy()
+                    game.board.pass_count = 0
+                    continue
 
             result = finish(game, komi, size)
             slots[i] = Game(Board.empty(size)) if started < num_games else None
@@ -175,6 +214,9 @@ def run(config: dict, log=print) -> SelfPlayExamples:
             for key in out:
                 out[key].extend(result["rows"][key])
             played += 1
+            if game.end is not None:
+                cleaned += 1
+                relabelled += result["relabelled"]
             elapsed = time.time() - start
             log(f"Game {played}/{num_games} done ({result['moves']} moves, winner={result['winner']}), "
                 f"{elapsed:.1f}s elapsed, {len(out['planes'])} examples, {evaluations / elapsed:.0f} evals/s")
@@ -185,6 +227,9 @@ def run(config: dict, log=print) -> SelfPlayExamples:
     pool.close()
     log(f"{played} games kept ({discarded_short} too short, {discarded_pass} elevated mid-game Pass weight), "
         f"{time.time() - start:.1f}s")
+    if cleanup_labels:
+        log(f"Cleanup: {cleaned} kept games ended unsettled and were played on; "
+            f"{relabelled / max(1, cleaned):.1f} points a game changed owner")
     return SelfPlayExamples(
         board_planes=np.stack(out["planes"]).astype(np.float32),
         policy_targets=np.stack(out["policy"]).astype(np.float32),

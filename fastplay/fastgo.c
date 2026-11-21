@@ -224,6 +224,91 @@ int fg_winner(const fg_board *b, double komi) {
     return FG_EMPTY;
 }
 
+/* ---------------------------------------------------------------------------------------- */
+/* Cleanup rule (mcts/dead_stone_estimator.py's is_cleanup_move and is_settled), used to      */
+/* play a finished game on until its dead stones are off the board, for ownership labels.     */
+/* ---------------------------------------------------------------------------------------- */
+
+/* The number of distinct liberties of the chain at start; *only gets the liberty when there is
+ * exactly one. */
+static int chain_liberties(int size, const int8_t *stones, int start, int *only) {
+    int stack[FG_MAX_POINTS], top = 0, count = 0, nb[4];
+    uint8_t mark[FG_MAX_POINTS], liberty[FG_MAX_POINTS];
+    int color = stones[start];
+    memset(mark, 0, size * size);
+    memset(liberty, 0, size * size);
+    mark[start] = 1;
+    stack[top++] = start;
+    while (top > 0) {
+        int p = stack[--top];
+        int k = neighbors(size, p, nb);
+        for (int i = 0; i < k; i++) {
+            int q = nb[i];
+            if (stones[q] == FG_EMPTY) {
+                if (!liberty[q]) {
+                    liberty[q] = 1;
+                    count++;
+                    *only = q;
+                }
+            } else if (stones[q] == color && !mark[q]) {
+                mark[q] = 1;
+                stack[top++] = q;
+            }
+        }
+    }
+    return count;
+}
+
+/* scoring.py's saves_chain_in_atari: playing p gives a liberty to a color chain whose only
+ * liberty is p. */
+static int saves_chain_in_atari(const fg_board *b, int p, int color) {
+    int nb[4], k = neighbors(b->size, p, nb), only = -1;
+    for (int i = 0; i < k; i++) {
+        if (b->stones[nb[i]] != color) continue;
+        if (chain_liberties(b->size, b->stones, nb[i], &only) == 1 && only == p) return 1;
+    }
+    return 0;
+}
+
+/* dead_stone_estimator.py's is_self_atari, for a legal point p: playing it captures nothing
+ * and leaves the mover's chain with at most one liberty. */
+static int is_self_atari(const fg_board *b, int p) {
+    fg_board after = *b;
+    int only = -1;
+    if (fg_play(&after, p) != 0) return 0; /* captured something (or illegal) */
+    return chain_liberties(b->size, after.stones, p, &only) <= 1;
+}
+
+/** Writes 1/0 per move into out (size*size points, then the pass, always 0): the legal moves
+ * dead_stone_estimator.py's is_cleanup_move allows -- not filling the mover's own area
+ * (unless it saves a chain in atari), not inside the other side's area, not a self-atari.
+ * Returns how many there are. */
+int fg_cleanup_mask(const fg_board *b, uint8_t *out) {
+    int points = b->size * b->size, n = 0, mover = b->to_play, opp = opponent(b->to_play);
+    int8_t owner[FG_MAX_POINTS];
+    fg_ownership(b, owner);
+    out[points] = 0;
+    for (int p = 0; p < points; p++) {
+        int allowed = fg_is_legal(b, p)
+            && !(owner[p] == mover && !saves_chain_in_atari(b, p, mover))
+            && owner[p] != opp
+            && !is_self_atari(b, p);
+        out[p] = (uint8_t)allowed;
+        n += allowed;
+    }
+    return n;
+}
+
+/** dead_stone_estimator.py's is_settled: every empty point counts for exactly one color. */
+int fg_is_settled(const fg_board *b) {
+    int8_t owner[FG_MAX_POINTS];
+    fg_ownership(b, owner);
+    for (int p = 0; p < b->size * b->size; p++) {
+        if (b->stones[p] == FG_EMPTY && owner[p] == FG_EMPTY) return 0;
+    }
+    return 1;
+}
+
 /** The net's input (bootstrap/inference.py's encode_planes): [3][size][size] own, opponent,
  * empty, relative to the player to move. */
 void fg_encode(const fg_board *b, float *out) {
@@ -436,6 +521,18 @@ double fg_root_visits(const fg_pool *pool, int g, int32_t *out) {
         out[child->move] = child->visits;
     }
     return mean_value(root);
+}
+
+/** Game g's root priors per move (size*size+1, root noise mixed in; 0 for illegal moves). */
+void fg_root_priors(const fg_pool *pool, int g, double *out) {
+    const fg_search *s = &pool->games[g];
+    int points = pool->size * pool->size;
+    memset(out, 0, sizeof(double) * (points + 1));
+    const fg_node *root = &s->nodes[0];
+    for (int i = 0; root->first_child >= 0 && i < root->num_children; i++) {
+        const fg_node *child = &s->nodes[root->first_child + i];
+        out[child->move] = child->prior;
+    }
 }
 
 /** Whether game g's search has run all its simulations. */

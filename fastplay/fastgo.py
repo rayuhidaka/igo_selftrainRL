@@ -7,6 +7,7 @@ imported (and again whenever fastgo.c is newer), into fastplay/build/ (gitignore
 from __future__ import annotations
 
 import ctypes
+import os
 import subprocess
 from pathlib import Path
 
@@ -30,10 +31,14 @@ def _build() -> None:
     _LIBRARY.parent.mkdir(exist_ok=True)
     if _LIBRARY.exists() and _LIBRARY.stat().st_mtime >= _SOURCE.stat().st_mtime:
         return
+    # Built under another name and renamed into place, so a process that has the old library
+    # loaded keeps running on it.
+    temporary = _LIBRARY.with_name(f"{_LIBRARY.name}.{os.getpid()}.tmp")
     subprocess.run(
-        ["cc", "-O3", "-march=native", "-shared", "-fPIC", "-o", str(_LIBRARY), str(_SOURCE), "-lm"],
+        ["cc", "-O3", "-march=native", "-shared", "-fPIC", "-o", str(temporary), str(_SOURCE), "-lm"],
         check=True,
     )
+    os.replace(temporary, _LIBRARY)
 
 
 class Board(ctypes.Structure):
@@ -102,6 +107,16 @@ class Board(ctypes.Structure):
         black, white = ctypes.c_int(), ctypes.c_int()
         _lib.fg_area_score(ctypes.byref(self), ctypes.byref(black), ctypes.byref(white))
         return black.value, white.value
+
+    def cleanup_mask(self) -> np.ndarray:
+        """1 per legal move dead_stone_estimator.py's is_cleanup_move allows (never the pass)."""
+        out = np.zeros(self.size * self.size + 1, dtype=np.uint8)
+        _lib.fg_cleanup_mask(ctypes.byref(self), out.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)))
+        return out
+
+    def is_settled(self) -> bool:
+        """dead_stone_estimator.py's is_settled: every empty point counts for exactly one color."""
+        return bool(_lib.fg_is_settled(ctypes.byref(self)))
 
     def encode(self) -> np.ndarray:
         """encode_planes as a [3, size, size] float32 array."""
@@ -178,6 +193,12 @@ class SearchPool:
         ) != 0:
             raise RuntimeError("search tree ran out of nodes")
 
+    def root_priors(self, game: int) -> np.ndarray:
+        """`game`'s root priors per move (`size*size+1`, root noise mixed in, 0 if illegal)."""
+        out = np.zeros(self.size * self.size + 1, dtype=np.float64)
+        _lib.fg_root_priors(self._pool, game, out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
+        return out
+
     def done(self, game: int) -> bool:
         return bool(_lib.fg_search_done(self._pool, game))
 
@@ -200,6 +221,8 @@ _lib.fg_ownership.argtypes = [_board_p, ctypes.POINTER(ctypes.c_int8)]
 _lib.fg_area_score.argtypes = [_board_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
 _lib.fg_winner.argtypes = [_board_p, ctypes.c_double]
 _lib.fg_encode.argtypes = [_board_p, ctypes.POINTER(ctypes.c_float)]
+_lib.fg_cleanup_mask.argtypes = [_board_p, ctypes.POINTER(ctypes.c_uint8)]
+_lib.fg_is_settled.argtypes = [_board_p]
 _lib.fg_pool_new.restype = ctypes.c_void_p
 _lib.fg_pool_new.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
 _lib.fg_pool_free.argtypes = [ctypes.c_void_p]
@@ -211,5 +234,6 @@ _lib.fg_collect.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
 _lib.fg_expand.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float)]
 _lib.fg_root_visits.restype = ctypes.c_double
 _lib.fg_root_visits.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int32)]
+_lib.fg_root_priors.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
 _lib.fg_search_done.argtypes = [ctypes.c_void_p, ctypes.c_int]
 _lib.fg_pending_game.argtypes = [ctypes.c_void_p, ctypes.c_int]

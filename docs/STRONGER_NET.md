@@ -107,7 +107,8 @@ checkpoint): 103.4 vs 103.9 positions a game, Black wins 26.8% vs 28.4%, tengen 
 54%, pass-favoring targets 2.36% vs 2.20%. The run is one Python process at 100% of a core
 with the GPU at ~85%, so there is little left to gain without a faster net call (fp16, CUDA
 graphs) or a second process. A 10x128 net (~2.4-3x gen11's compute) should still give roughly
-6-8x today's CPU speed with gen11. Not yet done: cleanup-labelled ownership (step 4) and
+6-8x today's CPU speed with gen11. Cleanup-labelled ownership (step 4) is in as
+`cleanup_labels` (fastplay/README.md); not used for training yet. Not supported:
 `score_utility_weight`.
 
 ## Self-play diversity (checked 2026-11-21)
