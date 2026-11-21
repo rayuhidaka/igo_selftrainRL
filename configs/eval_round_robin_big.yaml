@@ -1,0 +1,34 @@
+# The field for the bigger-net chain (docs/STRONGER_NET.md): eval_round_robin_option3.yaml's
+# checkpoints plus big1 (the 10x128 distilled net, field gate PASS 2026-11-22). Its own result
+# files, seeded from eval/gate_big1_round_robin_results.json, so the chain's gates never touch
+# the shared ratings igo-app ships. Each promoted big generation is added here.
+
+board_size: 9
+komi: 7.5
+num_games: 40
+num_simulations: 50
+temperature: 1.0
+temperature_drop_move: 16
+seed: 0
+
+anchor: baseline
+
+checkpoints:
+  baseline: checkpoints/bootstrap_batch2_residual_v2.pt
+  gen1: checkpoints/bootstrap_option3_gen1_candidate.pt
+  gen2: checkpoints/bootstrap_option3_gen2_candidate.pt
+  gen3: checkpoints/bootstrap_option3_gen3_candidate.pt
+  gen4: checkpoints/bootstrap_option3_gen4_300games_candidate.pt
+  gen5: checkpoints/bootstrap_option3_gen5_candidate.pt
+  gen6: checkpoints/bootstrap_option3_gen6_candidate.pt
+  gen7: checkpoints/bootstrap_option3_gen7_candidate.pt
+  gen8: checkpoints/bootstrap_option3_gen8_candidate.pt
+  gen9: checkpoints/bootstrap_option3_gen9_candidate.pt
+  gen10: checkpoints/bootstrap_option3_gen10_candidate.pt
+  gen11: checkpoints/bootstrap_option3_gen11_candidate.pt
+  gen12: checkpoints/bootstrap_option3_gen12_1000games_candidate.pt  # the 1000-game retry, not the 500-game run
+  big1: checkpoints/big10x128_distill_phase2.pt
+
+out_dir: eval
+raw_out_name: round_robin_big_results.json
+elo_out_name: checkpoints_big_elo.json

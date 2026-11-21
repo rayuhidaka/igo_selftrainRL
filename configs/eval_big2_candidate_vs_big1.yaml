@@ -1,0 +1,9 @@
+# Bigger-net chain, generation 2: does it beat big1 (its parent, top of the field)?
+
+board_size: 9
+num_games: 80
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/big10x128_distill_phase2.pt
+min_elo_gap: 50

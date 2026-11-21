@@ -1,0 +1,22 @@
+# Bigger-net chain, generation 2 self-play (docs/STRONGER_NET.md): big1 (10x128, field gate
+# PASS 2026-11-22) with gen12's recipe, by fastplay, with cleanup-labelled ownership targets.
+
+checkpoint_path: checkpoints/big10x128_distill_phase2.pt
+board_size: 9
+komi: 7.5
+seed: 20261124
+
+num_games: 2000
+parallel_games: 128
+device: auto
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+cleanup_labels: true
+
+out_path: selfplay_games/fastplay_big2.npz
