@@ -1,0 +1,23 @@
+# Stage 1 of docs/STRONGER_NET.md: fastplay (batched, GPU) against selfplay/self_play.py with
+# gen12's recipe -- gen11 at 400 simulations, the same noise, temperature and pass guard as
+# configs/selfplay_self_play_option3_gen11.yaml. Compare speed and game statistics with
+# fastplay/dataset_stats.py against selfplay_games/self_play_option3_gen12.npz.
+
+checkpoint_path: checkpoints/bootstrap_option3_gen11_candidate.pt
+board_size: 9
+komi: 7.5
+seed: 20261122
+
+num_games: 512
+parallel_games: 128
+device: auto
+max_moves: 200
+num_simulations: 400
+temperature: 1.0
+temperature_drop_move: 30
+no_pass_before_move: 20
+max_seconds: null
+root_dirichlet_epsilon: 0.25
+root_dirichlet_alpha: 0.1
+
+out_path: selfplay_games/fastplay_benchmark_gen11.npz

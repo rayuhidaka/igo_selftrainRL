@@ -20,3 +20,6 @@ runs
 
 # Env / secrets
 .env
+
+# fastplay/fastgo.py compiles fastgo.c here
+fastplay/build/

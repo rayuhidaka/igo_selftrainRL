@@ -72,7 +72,7 @@ So moving the net to the GPU alone gives at most ~2x. Both halves have to go.
 - **Batched evaluation.** Each worker runs many games at once (e.g. 64-128). Every simulation
   step walks one leaf per game, evaluates all leaves as one batch on the RTX 3050, then backs up.
   No virtual loss needed at first: one leaf per game per step already fills a batch.
-- **Fast rules engine.** A numpy/numba board with incrementally kept chains and liberties
+- **Fast rules engine** (built in C instead, see "Fast self-play: built and measured"). A numpy/numba board with incrementally kept chains and liberties
   (`play` updates only the neighbors' chains; legality and captures become lookups). Keeps
   `engine/`'s behaviour exactly: checked against it on random games move by move (legal move
   sets, captures, ko, area score).
@@ -83,6 +83,32 @@ So moving the net to the GPU alone gives at most ~2x. Both halves have to go.
   checkpoint must give the same statistics (game length, pass rate, opening spread, win rate).
 - **Measured, not assumed:** games per hour against today's 4-worker CPU run, at 200 sims.
   Target 10x or more.
+
+## Fast self-play: built and measured (2026-11-22)
+
+`fastplay/` (see its README). The rules and the PUCT search are in C (`fastgo.c`, compiled by
+the system compiler via ctypes; numba couldn't be installed, since WSL has no network here),
+with one tree per game and 128 games batched on the RTX 3050. `tests/test_fastgo.py` checks it
+against `engine/` and `mcts/` move by move on random 3x3/5x5/9x9 games (board, legal moves, ko,
+area score, ownership, planes). It also checks that the search's visit counts equal
+`mcts.py`'s exactly, with and without root noise.
+
+Benchmark (`configs/fastplay_benchmark_gen11.yaml`, gen12's recipe: gen11, 400 sims, same
+noise, temperature and pass guard):
+
+| | fastplay | `selfplay.run_parallel`, 4 CPU workers |
+|---|---|---|
+| 512 / 500 games | 27 min | ~8 h |
+| Games an hour | ~1140 | ~62 |
+| Net evaluations a second | ~12,800 | ~720 |
+
+18x faster, with the same games (`fastplay/dataset_stats.py`, vs gen12's self-play from the same
+checkpoint): 103.4 vs 103.9 positions a game, Black wins 26.8% vs 28.4%, tengen first 53% vs
+54%, pass-favoring targets 2.36% vs 2.20%. The run is one Python process at 100% of a core
+with the GPU at ~85%, so there is little left to gain without a faster net call (fp16, CUDA
+graphs) or a second process. A 10x128 net (~2.4-3x gen11's compute) should still give roughly
+6-8x today's CPU speed with gen11. Not yet done: cleanup-labelled ownership (step 4) and
+`score_utility_weight`.
 
 ## Self-play diversity (checked 2026-11-21)
 
