@@ -343,6 +343,7 @@ typedef struct {
     int32_t num_nodes, capacity;
     int32_t sims_done, sims_target;
     double c_puct, komi, noise_epsilon;
+    double fpu_reduction; /* < 0: an unvisited child counts as 0.0 (mcts.py's fpu_reduction None) */
     double noise[FG_MAX_POINTS + 1];
     int32_t noise_len;
     int32_t active;
@@ -386,7 +387,7 @@ void fg_pool_free(fg_pool *pool) {
  * into the root's priors with weight noise_epsilon when the root is expanded, as mcts.py's
  * _add_root_noise does. */
 void fg_search_begin(fg_pool *pool, int g, const fg_board *root, int sims, double c_puct, double komi,
-                     const double *noise, int noise_len, double noise_epsilon) {
+                     const double *noise, int noise_len, double noise_epsilon, double fpu_reduction) {
     fg_search *s = &pool->games[g];
     s->root = *root;
     s->num_nodes = 1;
@@ -396,6 +397,7 @@ void fg_search_begin(fg_pool *pool, int g, const fg_board *root, int sims, doubl
     s->c_puct = c_puct;
     s->komi = komi;
     s->noise_epsilon = noise_epsilon;
+    s->fpu_reduction = fpu_reduction;
     s->noise_len = noise ? noise_len : 0;
     if (noise) memcpy(s->noise, noise, sizeof(double) * noise_len);
     s->active = sims > 0;
@@ -407,11 +409,21 @@ static double mean_value(const fg_node *n) { return n->visits == 0 ? 0.0 : n->va
 /* mcts.py's _select_child: the first child with the highest PUCT score. */
 static int select_child(const fg_search *s, const fg_node *node) {
     double parent = sqrt((double)node->visits);
+    /* mcts.py's _first_play_value: an unvisited child's worth. */
+    double fpu = 0.0;
+    if (s->fpu_reduction >= 0.0) {
+        double visited_prior = 0.0;
+        for (int i = 0; i < node->num_children; i++) {
+            const fg_node *child = &s->nodes[node->first_child + i];
+            if (child->visits > 0) visited_prior += child->prior;
+        }
+        fpu = mean_value(node) - s->fpu_reduction * sqrt(visited_prior);
+    }
     int best = -1;
     double best_score = 0.0;
     for (int i = 0; i < node->num_children; i++) {
         const fg_node *child = &s->nodes[node->first_child + i];
-        double exploitation = -mean_value(child);
+        double exploitation = child->visits > 0 ? -mean_value(child) : fpu;
         double exploration = s->c_puct * child->prior * parent / (1 + child->visits);
         double score = exploitation + exploration;
         if (best < 0 || score > best_score) {

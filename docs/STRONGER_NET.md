@@ -170,6 +170,37 @@ third of a 9x9 game (AlphaZero's 30 was out of 361 points), so early value targe
 games decided partly by sampled weak moves. Experiment: temperature 1 -> ~0.3 over the first
 10-15 moves vs today's schedule, judged by the field gate.
 
+## big1 at 800 sims: Level 12, big2, and the first-move flaw (2026-11-22/23)
+
+- **Float16** (`export/to_tflite.py --float16`): 12.2 → 6.1 MB, best move unchanged in 99.95% of
+  2000 held-out positions.
+- **big2** (first fastplay self-play step from big1, `runs/big2.log`): field gate **FAIL**,
+  2241.8 vs big1's 2243.7.
+- **As igo-app's Level 12** (big1 at 800 sims vs gen11 at 800, 120 games, first 16 moves sampled,
+  no pass before move 20): big1 won 75 by area (+88.7) and 73 by territory (+76.5), ±33. The
+  +121 head-to-head at 50 sims shrinks with deeper search. Emulator: 1.59 s a move at 800 sims on 4
+  threads.
+- **Weak first move.** In the app big1 opened on the second line. Raw policy on the empty board:
+  big1 tengen 0.545 with 0.125 on the first line (gen11: 0.914 / 0.009). Its training data is the
+  cause: gen11's self-play first-move targets (gen12 CPU data and `fastplay_gen11_2000`, ~64% of
+  the distill mix) are ~51% tengen, the rest spread evenly over all 81 points; gen10's (gen11's
+  training data) were 96% tengen. Same code and config, different net. **Root cause: first-play
+  urgency.** `mcts.py` (and `fastgo.c`) counted an unvisited child as 0.0, an even game. gen11
+  thinks Black is slightly behind at komi 7.5 (White +0.12 after Black's tengen; gen10 said
+  −0.36), so every untried move looks better than tengen and a 200-sim search visits all 82
+  moves; those single visits become the recorded target. big1 is gloomier still (+0.30): 200
+  sims give pass 102, tengen 17. Beyond move 1, ~28% of all self-play positions have every legal
+  move visited, in every generation's data alike, so the side that's behind gets blurred policy
+  targets throughout.
+- **Fix (2026-11-23):** `MctsConfig.fpu_reduction` / self-play key `fpu_reduction` (fastplay
+  too): an unvisited child is worth the parent's mean value minus `fpu_reduction * sqrt(prior
+  mass already visited)` (Leela Zero / KataGo). `None` (default) keeps the old 0.0, so the gate
+  and every earlier run are unchanged. Empty board, 200 sims, 0.2: gen11 199 visits on tengen
+  (before: all 82 moves visited, tengen 77, pass 42); big1 8 moves, tengen 97, then (3,5) 53,
+  (3,3) 12, no edge or pass (before: pass 102, tengen 17). Tests: losing-side widening with and
+  without it, and fastgo's visits equal mcts.py's with it on. Next: the chain from big1 with
+  `fpu_reduction: 0.2` in self-play.
+
 ## Also worth taking from KataGo once this runs
 
 - Playout cap randomization (most moves with a small search, a few with a full one recorded as

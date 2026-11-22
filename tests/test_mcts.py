@@ -149,6 +149,40 @@ class MctsTest(unittest.TestCase):
         self.assertGreater(visits[Pass()], visits[Play(Point(1, 2))])
         self.assertEqual(Pass(), mcts.select_move(position))
 
+    def _behind_everywhere_search(self, fpu_reduction: float | None) -> dict[Move, int]:
+        # Every position looks good for its player to move, so every move looks bad for the one
+        # making it (the gen11 empty board: Black thinks it's slightly behind at komi 7.5).
+        center = Play(Point(4, 4))
+        net = FakePolicyValueNet(
+            value=lambda position: 0.3,
+            policy=lambda position: _skewed_policy(position, center, favored_prior=0.6),
+        )
+        config = MctsConfig(num_simulations=200, fpu_reduction=fpu_reduction)
+        return Mcts(net, config).search(Position.empty(9)).move_visits
+
+    def test_without_fpu_reduction_a_side_that_is_behind_visits_every_legal_move(self) -> None:
+        visits = self._behind_everywhere_search(fpu_reduction=None)
+        # 47 of 82 in 200 simulations: each untried move, rated an even 0.0, beats the favored
+        # move's -0.3.
+        self.assertGreater(sum(1 for count in visits.values() if count > 0), 40)
+
+    def test_fpu_reduction_keeps_a_side_that_is_behind_on_its_favored_moves(self) -> None:
+        visits = self._behind_everywhere_search(fpu_reduction=0.2)
+        self.assertLess(sum(1 for count in visits.values() if count > 0), 5)
+        self.assertGreater(visits[Play(Point(4, 4))], 150)
+
+    def test_fpu_reduction_keeps_the_favored_move_on_top_when_ahead(self) -> None:
+        # Ahead everywhere (each move looks good for its maker): the favored move stays the most
+        # visited with or without the reduction.
+        center = Play(Point(1, 1))
+        net = FakePolicyValueNet(
+            value=lambda position: -0.3,
+            policy=lambda position: _skewed_policy(position, center, favored_prior=0.6),
+        )
+        for reduction in (None, 0.2):
+            visits = Mcts(net, MctsConfig(num_simulations=100, fpu_reduction=reduction)).search(Position.empty(3)).move_visits
+            self.assertEqual(center, max(visits.items(), key=lambda item: item[1])[0], reduction)
+
     def test_root_dirichlet_noise_is_a_no_op_when_epsilon_is_zero(self) -> None:
         # MctsConfig's default -- confirms opting into noise is required, not automatic.
         center = Play(Point(1, 1))

@@ -198,6 +198,7 @@ def search_config(config: dict, komi: float) -> MctsConfig:
     return MctsConfig(
         num_simulations=config.get("num_simulations", defaults.num_simulations),
         exploration_constant=config.get("exploration_constant", defaults.exploration_constant),
+        fpu_reduction=config.get("fpu_reduction", defaults.fpu_reduction),
         komi=komi,
         root_dirichlet_alpha=config.get("root_dirichlet_alpha", defaults.root_dirichlet_alpha),
         root_dirichlet_epsilon=config.get("root_dirichlet_epsilon", defaults.root_dirichlet_epsilon),

@@ -164,16 +164,19 @@ class SearchPool:
         komi: float,
         noise: np.ndarray | None = None,
         noise_epsilon: float = 0.0,
+        fpu_reduction: float | None = None,
     ) -> None:
         """Starts `game`'s search from `root`. `noise` (one value per legal board move, in point
-        order) is mixed into the root's priors with weight `noise_epsilon`."""
+        order) is mixed into the root's priors with weight `noise_epsilon`. `fpu_reduction` is
+        `MctsConfig.fpu_reduction` (`None`: an unvisited child counts as 0.0)."""
+        fpu = -1.0 if fpu_reduction is None else fpu_reduction
         if noise is None:
-            _lib.fg_search_begin(self._pool, game, ctypes.byref(root), simulations, c_puct, komi, None, 0, 0.0)
+            _lib.fg_search_begin(self._pool, game, ctypes.byref(root), simulations, c_puct, komi, None, 0, 0.0, fpu)
         else:
             noise = np.ascontiguousarray(noise, dtype=np.float64)
             _lib.fg_search_begin(
                 self._pool, game, ctypes.byref(root), simulations, c_puct, komi,
-                noise.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), len(noise), noise_epsilon,
+                noise.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), len(noise), noise_epsilon, fpu,
             )
 
     def collect(self) -> np.ndarray:
@@ -228,7 +231,7 @@ _lib.fg_pool_new.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
 _lib.fg_pool_free.argtypes = [ctypes.c_void_p]
 _lib.fg_search_begin.argtypes = [
     ctypes.c_void_p, ctypes.c_int, _board_p, ctypes.c_int, ctypes.c_double, ctypes.c_double,
-    ctypes.POINTER(ctypes.c_double), ctypes.c_int, ctypes.c_double,
+    ctypes.POINTER(ctypes.c_double), ctypes.c_int, ctypes.c_double, ctypes.c_double,
 ]
 _lib.fg_collect.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
 _lib.fg_expand.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float)]

@@ -175,6 +175,21 @@ class SearchPoolTest(unittest.TestCase):
             # The fake net's float32 matmul rounds differently in a batch of 12 than of 1.
             self.assertAlmostEqual(root_value, expected.root_value, places=6)
 
+    def test_visits_match_mcts_py_with_fpu_reduction(self) -> None:
+        size, sims = 9, 120
+        net = _PlanesNet(size, seed=4)
+        positions = [p for p, _ in _random_games(size, 2, seed=7)][::9][:12]
+        pool = SearchPool(len(positions), size, sims)
+        for game, position in enumerate(positions):
+            pool.begin(game, Board.from_position(position), sims, c_puct=1.5, komi=7.5, fpu_reduction=0.2)
+        _run_pool(pool, net)
+        for game, position in enumerate(positions):
+            config = MctsConfig(num_simulations=sims, exploration_constant=1.5, komi=7.5, fpu_reduction=0.2)
+            expected = Mcts(net, config).search(position)
+            visits, _ = pool.root_visits(game)
+            for move, count in expected.move_visits.items():
+                self.assertEqual(visits[move_index(move, size)], count, f"game {game} move {move}")
+
     def test_finished_games_are_scored_not_evaluated(self) -> None:
         # Black far ahead on 3x3 after white passed: passing out wins, and the search sees it.
         size = 3

@@ -29,6 +29,18 @@ class MctsConfig:
     exploration_constant: float = 1.5
     """The PUCT exploration constant (often called `cPuct`); higher favors exploring low-visit moves."""
 
+    fpu_reduction: float | None = None
+    """First-play urgency: what a not-yet-visited child is worth to the selection. `None` (the
+    default, every search before 2026-11-23) counts it as 0.0, an even game. That makes a side
+    that thinks it's behind try every legal move once, since each untried move looks better than
+    its real candidates: gen11 at the empty board (Black slightly behind at komi 7.5) visited all
+    82 moves in 200 simulations, so its self-play first-move targets put ~49% evenly over the
+    board, and big1, distilled from them, opens on the second line (memory `fpu_zero_widening`;
+    ~28% of all self-play positions have every legal move visited). A number instead values an
+    untried child at the parent's own mean value minus `fpu_reduction * sqrt(prior mass of the
+    children already visited)` (Leela Zero / KataGo), so untried moves stay slightly worse than
+    the position's current estimate whether that side is ahead or behind."""
+
     komi: float = 7.5
     """Komi added to white's `AreaScore` when a search reaches a finished game."""
 
@@ -229,13 +241,23 @@ class Mcts:
     def _select_child(self, node: _Node) -> tuple[Move, _Node]:
         """Picks `node`'s child maximizing the PUCT score, from `node`'s own player-to-move's perspective."""
         parent_visits = node.visit_count
+        fpu = self._first_play_value(node)
         best_move, best_child = max(
-            node.children.items(), key=lambda item: self._puct_score(item[1], parent_visits)
+            node.children.items(), key=lambda item: self._puct_score(item[1], parent_visits, fpu)
         )
         return best_move, best_child
 
-    def _puct_score(self, child: _Node, parent_visits: int) -> float:
-        exploitation = -child.mean_value
+    def _first_play_value(self, node: _Node) -> float:
+        """What an unvisited child of `node` is worth from `node`'s player to move's perspective;
+        see `MctsConfig.fpu_reduction`."""
+        reduction = self._config.fpu_reduction
+        if reduction is None:
+            return 0.0
+        visited_prior = sum(child.prior for child in node.children.values() if child.visit_count > 0)
+        return node.mean_value - reduction * math.sqrt(visited_prior)
+
+    def _puct_score(self, child: _Node, parent_visits: int, fpu: float = 0.0) -> float:
+        exploitation = -child.mean_value if child.visit_count > 0 else fpu
         exploration = (
             self._config.exploration_constant * child.prior * math.sqrt(parent_visits) / (1 + child.visit_count)
         )

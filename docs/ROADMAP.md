@@ -1062,3 +1062,11 @@ Players beat igo-app's Level 10 (gen11). Plan, profile, design and the decisions
 publisher are in `docs/STRONGER_NET.md`: GPU-batched self-play with a fast rules engine, then a
 bigger net warm-started from the existing games, self-play endings labelled with the cleanup
 rule, and (agreed, later) a self-play temperature schedule experiment.
+
+**2026-11-22/23:** big1 (10x128) passed the field gate and was rated as igo-app's Level 12
+(+89 over Level 11 at 800 sims); big2 failed the gate (2241.8 vs 2243.7). big1's weak first
+move traced to first-play urgency (unvisited moves counted as an even game, so a side that's
+behind visits every move once and records that as its policy target); fixed behind
+`fpu_reduction` (default off). Detail in `docs/STRONGER_NET.md`. Publisher's direction
+(2026-11-23): no release for now; keep training further levels with the fix, pick which to ship
+later (Level 12 may be dropped for a later one).

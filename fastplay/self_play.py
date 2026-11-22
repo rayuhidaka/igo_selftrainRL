@@ -124,6 +124,7 @@ def run(config: dict, log=print) -> SelfPlayExamples:
     if sims > 4096:
         raise ValueError("fastgo.c searches at most 4096 simulations")
     c_puct = config.get("exploration_constant", 1.5)
+    fpu_reduction = config.get("fpu_reduction")  # MctsConfig.fpu_reduction; None keeps the old 0.0
     alpha = config.get("root_dirichlet_alpha", 0.1)
     epsilon = config.get("root_dirichlet_epsilon", 0.0)
     temperature = config["temperature"]
@@ -159,14 +160,14 @@ def run(config: dict, log=print) -> SelfPlayExamples:
             if game is None:
                 continue
             if game.end is not None:
-                pool.begin(i, game.board, cleanup_sims, c_puct, komi)
+                pool.begin(i, game.board, cleanup_sims, c_puct, komi, fpu_reduction=fpu_reduction)
                 continue
             noise = None
             if epsilon > 0:
                 board_moves = int(game.board.legal_mask()[:points].sum())
                 if board_moves > 0:
                     noise = noise_rng.dirichlet([alpha] * board_moves)
-            pool.begin(i, game.board, sims, c_puct, komi, noise, epsilon)
+            pool.begin(i, game.board, sims, c_puct, komi, noise, epsilon, fpu_reduction)
         while True:
             planes = pool.collect()
             if len(planes) == 0:
