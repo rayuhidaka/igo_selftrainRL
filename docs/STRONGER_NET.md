@@ -217,6 +217,52 @@ games decided partly by sampled weak moves. Experiment: temperature 1 -> ~0.3 ov
   gen10. Self-play: Black won 43.1%; first moves (1,4) 36%, star (2,2) 18%, (1,3) 16%, 3-4 15% —
   the second-line opening keeps growing. Held-out (gen11 benchmark): policy 2.549, value 0.400
   (big2f 2.528 / 0.393) — slightly worse there while much stronger in play.
+- **big4 (2026-11-24): big3's self-play, same recipe (mix big4 0.50 / big3 0.25 / big2f 0.10 /
+  older 0.15) — field gate PASS at 2343.6, only +4 over big3** (2339.6 on the same refit; the
+  whole field shifted down, big2f 2299.3, big1 2186.1, gen11 2145.4); parent match vs big3
+  PROMOTE, 1545.0 vs 1455.0 (+90) over 80 games. Gate pairings: 25-15 vs big3, 23-17 vs big2f,
+  34-6 vs big1. Big4 beats big3 head-to-head but does no better than big3 against the rest of the
+  field: the chain's gains are shrinking (+175, then +90). Self-play: Black won 42.1%. Held-out:
+  policy 2.573, value 0.401 (big3 2.549 / 0.400). Promoted into the big field. Candidate igo-app
+  Level 11 (rating match against big1 at 800 simulations, 2026-11-24).
+
+## Temperature experiment (planned 2026-11-24, `run_big5_temperature.sh`)
+
+**Why now.** The chain's head-to-head gains are shrinking (big3 +175 over big2f, big4 +90 over
+big3, and big4 only +4 over big3 on the field), so another plain step is unlikely to give much.
+The opening randomness is the main lever not touched yet. Measured on big4's 2000 self-play games:
+
+- Games are 108 moves on average (median 104, p10 84, p90 133); the first 30 moves, sampled at
+  temperature 1, are 28% of all recorded positions (AlphaZero's 30 were ~12% of a 19x19 game).
+- The search's top move gets 34% of the visits at moves 0-4, 50% at 5-9 and 57-59% at 10-29, so
+  sampling plays something other than the top move about **14 times in the first 30 moves of
+  every game** -- most of them at moves 10-29, which on 9x9 is already the fight.
+- So the game result, every position's value target, is decided partly by those sampled moves;
+  and a third of the recorded positions are ones the net would never reach in its own play.
+
+**Change (one, config only).** `temperature_drop_move` 30 → 12: sampling still covers the opening,
+where the visits are spread (every self-play game was already unique by move 10, 2026-11-21), and
+stops before the middle game. The root Dirichlet noise stays as it is. A gradual 1 → 0.3 schedule
+(the earlier idea above) needs a fastplay change; it is the follow-up if the plain cut helps.
+
+**Design.** Two chain steps from big4 that differ only in that setting, with the same self-play seed
+(20261127), the same fine-tune mix (own games 0.50 / big4 0.25 / big3 0.10 / older 0.15) and seed
+(2005): **big5** (30, the control: what the next plain step would give) and **big5t** (12). Without
+the control a gain couldn't be told apart from an ordinary chain step. ~13-14 h for both.
+
+**Measures.** big5t vs big5 head-to-head (120 games at 50 simulations, `eval_big5t_vs_big5.yaml`);
+both in one field gate (parent big4); held-out losses on the gen11 benchmark; in big5t's self-play,
+Black's win rate and the first-move spread (to see the opening variety holds).
+
+**Decision.**
+- **Adopt 12 for the chain** if big5t beats big5 by at least +50 Elo head-to-head (about 69 of 120;
+  ±~35 is noise at 120 games) **and** rates at least as high as big5 in the field gate. Then the chain
+  continues from big5t, and the 1 → 0.3 schedule is the next thing to try.
+- **Keep 30** if big5t is within ±50 of big5 or below it; the chain continues from whichever of the
+  two passes the gate higher.
+- Either way, a passing arm is the next candidate for igo-app's top level (rated like Level 11).
+- If neither arm passes the gate, the chain has stalled at this net size: the next lever is a bigger
+  net or more games per step, not more of the same recipe.
 
 ## Also worth taking from KataGo once this runs
 

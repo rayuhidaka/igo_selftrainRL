@@ -1,0 +1,12 @@
+# Temperature experiment (2026-11-24, docs/STRONGER_NET.md): does big5t (sampled moves until move 12)
+# beat big5 (until move 30, the old schedule), both one step from big4 with the same mix and seeds?
+# 120 games rather than 80: the chain's last gain was +90, so the difference may be small.
+# "PROMOTE" here means big5t is at least min_elo_gap above big5 -- the experiment's first condition.
+
+board_size: 9
+num_games: 120
+num_simulations: 50
+komi: 7.5
+
+current_tier_checkpoint: checkpoints/big5_candidate.pt
+min_elo_gap: 50

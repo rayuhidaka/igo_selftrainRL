@@ -1071,5 +1071,8 @@ behind visits every move once and records that as its policy target); fixed behi
 (2026-11-23): no release for now; keep training further levels with the fix, pick which to ship
 later (Level 12 may be dropped for a later one). **big2f, with the fix in self-play, passed the
 field gate at 2363.6, top of the field (+109 over big1).** **big3, the next step, passed at
-2380.4 (big2f refit to 2329.6), +175 over big2f head-to-head.** **Next (agreed 2026-11-23): big4 from big3, same recipe
-(`run_big3.sh` pattern, fpu 0.2), when the publisher says go — after a computer restart.**
+2380.4 (big2f refit to 2329.6), +175 over big2f head-to-head.** **big4, the next step, passed at 2343.6
+(2026-11-24) but only +4 over big3 on the field (+90 head-to-head); promoted into the big field.**
+**Next: the temperature experiment** (`run_big5_temperature.sh`, planned in `docs/STRONGER_NET.md`):
+big5 (sampled moves until move 30) vs big5t (until move 12), both from big4, ~13-14 h — when the
+publisher says go, after igo-app's Level 11 match and dead-stone test free the CPU.
