@@ -31,7 +31,6 @@ checkpoints:
   big2f: checkpoints/big2f_candidate.pt  # promoted 2026-11-23 (field gate 2363.6)
   big3: checkpoints/big3_candidate.pt  # promoted 2026-11-23 (field gate 2380.4)
   big4: checkpoints/big4_candidate.pt  # promoted 2026-11-24 (field gate 2343.6; big3 2339.6 on the same refit)
-  big4: checkpoints/big4_candidate.pt  # promoted 2026-11-24 (field gate 2343.6 on its refit; big3 2339.6)
 
 out_dir: eval
 raw_out_name: round_robin_big_results.json
