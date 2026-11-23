@@ -28,6 +28,7 @@ checkpoints:
   gen11: checkpoints/bootstrap_option3_gen11_candidate.pt
   gen12: checkpoints/bootstrap_option3_gen12_1000games_candidate.pt  # the 1000-game retry, not the 500-game run
   big1: checkpoints/big10x128_distill_phase2.pt
+  big2f: checkpoints/big2f_candidate.pt  # promoted 2026-11-23 (field gate 2363.6)
 
 out_dir: eval
 raw_out_name: round_robin_big_results.json
