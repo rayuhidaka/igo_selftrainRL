@@ -1,0 +1,41 @@
+# big4: big3 fine-tuned on its own 2000 fastplay games (fpu_reduction 0.2), big3's mix shifted one
+# generation: big4's games 0.50, big3's 0.25, big2f's 0.10, the older gen11-level games 0.15.
+# 20 min at lr 2e-4 on the RTX 3050, as big3.
+
+board_size: 9
+seed: 2004
+init_from_checkpoint: checkpoints/big3_candidate.pt
+device: auto
+augment: true
+
+checkpoint_out: checkpoints/big4_candidate.pt
+data_source:
+  - path: selfplay_games/fastplay_big4.npz                 # big3, 2000 games, fpu 0.2
+    weight: 0.50
+  - path: selfplay_games/fastplay_big3.npz                 # big2f, 2000 games, fpu 0.2
+    weight: 0.25
+  - path: selfplay_games/fastplay_big2f.npz                # big1, 2000 games, fpu 0.2
+    weight: 0.10
+  - path: selfplay_games/fastplay_gen11_2000.npz           # gen11, 2000 games
+    weight: 0.05
+  - path: selfplay_games/self_play_option3_gen12.npz
+    weight: 0.02
+  - path: selfplay_games/self_play_option3_gen12_extra500.npz
+    weight: 0.02
+  - path: selfplay_games/self_play_option3_gen12_800sims.npz
+    weight: 0.02
+  - path: selfplay_games/self_play_option3_gen11.npz
+    weight: 0.01
+  - path: selfplay_games/batch2.npz
+    weight: 0.03
+
+batch_size: 256
+learning_rate: 0.0002
+epochs: 1000
+
+log_dir: runs
+run_name: big4_candidate
+log_every_n_steps: 200
+checkpoint_interval_steps: 2000
+
+max_train_seconds: 1200
