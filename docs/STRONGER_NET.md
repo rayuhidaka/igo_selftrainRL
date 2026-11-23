@@ -198,8 +198,19 @@ games decided partly by sampled weak moves. Experiment: temperature 1 -> ~0.3 ov
   and every earlier run are unchanged. Empty board, 200 sims, 0.2: gen11 199 visits on tengen
   (before: all 82 moves visited, tengen 77, pass 42); big1 8 moves, tengen 97, then (3,5) 53,
   (3,3) 12, no edge or pass (before: pass 102, tengen 17). Tests: losing-side widening with and
-  without it, and fastgo's visits equal mcts.py's with it on. Next: the chain from big1 with
-  `fpu_reduction: 0.2` in self-play.
+  without it, and fastgo's visits equal mcts.py's with it on.
+- **big2f (2026-11-23): big2 again with `fpu_reduction: 0.2` in self-play, nothing else
+  changed — field gate PASS at 2363.6, top of the field** (big1 2254.8, gen11 2209.0); parent
+  match vs big1 PROMOTE, 1547.8 vs 1452.2 over 80 games (big2 failed both). Self-play data: every
+  legal move visited in 6.2% of positions (big2 27.8%), mean top target 0.43 (0.33), Black won
+  46.4% of the games (20.9%). Held-out (gen11 benchmark, old-search targets): policy 2.528 (big1
+  2.514; the benchmark's targets carry the old spread), value 0.393 (big1 0.400). First move:
+  first line 15% → 3% of the target, tengen 17% → 9%, **second line 50%** — big1's real searched
+  belief (Black's value after a 400-sim search: tengen −0.45, star −0.21, second line (1,4)
+  −0.21, 3-4 −0.25, first line −0.69; gen11 too rates tengen below star and 3-4 once it searches).
+  **Publisher's decision: accept it for training** — no opening steering; let later generations
+  find their own openings (an app-side first-move choice stays possible for a shipped level).
+  Next: big3 from big2f, same recipe.
 
 ## Also worth taking from KataGo once this runs
 

@@ -1069,4 +1069,5 @@ move traced to first-play urgency (unvisited moves counted as an even game, so a
 behind visits every move once and records that as its policy target); fixed behind
 `fpu_reduction` (default off). Detail in `docs/STRONGER_NET.md`. Publisher's direction
 (2026-11-23): no release for now; keep training further levels with the fix, pick which to ship
-later (Level 12 may be dropped for a later one).
+later (Level 12 may be dropped for a later one). **big2f, with the fix in self-play, passed the
+field gate at 2363.6, top of the field (+109 over big1).**
