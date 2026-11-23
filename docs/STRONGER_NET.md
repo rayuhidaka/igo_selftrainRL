@@ -210,7 +210,13 @@ games decided partly by sampled weak moves. Experiment: temperature 1 -> ~0.3 ov
   −0.21, 3-4 −0.25, first line −0.69; gen11 too rates tengen below star and 3-4 once it searches).
   **Publisher's decision: accept it for training** — no opening steering; let later generations
   find their own openings (an app-side first-move choice stays possible for a shipped level).
-  Next: big3 from big2f, same recipe.
+- **big3 (2026-11-23): big2f's self-play (fpu 0.2), fine-tune mix big3 0.50 / big2f 0.25 /
+  gen11 fastplay 0.10 / older 0.15 — field gate PASS at 2380.4, top** (refit with big3 in the
+  field: big2f 2329.6, big1 2223.5, gen11 2175.6); parent match vs big2f PROMOTE, 1587.3 vs
+  1412.7 (+175) over 80 games. Gate pairings: 27-13 vs big2f, 33-7 vs big1, 37-3 vs gen11 and
+  gen10. Self-play: Black won 43.1%; first moves (1,4) 36%, star (2,2) 18%, (1,3) 16%, 3-4 15% —
+  the second-line opening keeps growing. Held-out (gen11 benchmark): policy 2.549, value 0.400
+  (big2f 2.528 / 0.393) — slightly worse there while much stronger in play.
 
 ## Also worth taking from KataGo once this runs
 
