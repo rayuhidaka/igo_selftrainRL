@@ -264,6 +264,33 @@ Black's win rate and the first-move spread (to see the opening variety holds).
 - If neither arm passes the gate, the chain has stalled at this net size: the next lever is a bigger
   net or more games per step, not more of the same recipe.
 
+**Result (run 2026-11-24 22:46 → 2026-11-25 11:52 JST, log `runs/big5_temperature.log`).**
+
+| | big4 (parent) | big5 (30) | big5t (12) |
+|---|---|---|---|
+| Held-out policy / value (gen11 benchmark) | 2.5728 / 0.4011 | 2.5877 / 0.4020 | 2.5834 / **0.3857** |
+| Self-play: Black wins, mean length | (42.1%) | 38.5%, 108.4 moves | 35.5%, 106.4 moves |
+| Head-to-head (120 games, 50 sims) | | 1510.2 | 1489.8 (**−20**, noise) |
+| Field gate (refit field) | 2312.2 | 2309.0 **FAIL** | 2313.8 **PASS** |
+| In the field | big4–big5 18–22 | big5t–big5 22–18 | big4–big5t 20–20 |
+
+(big3 refit to 2301.0 in the same fit.) Self-play took ~3.5 h per arm, not the planned 4.3 h. The
+first-move spread wasn't measured separately: big5t's openings are sampled exactly like big5's up to
+move 12, so they stay just as varied.
+
+**Reading.** By the rule: keep 30 (big5t is within ±50 of big5, here slightly below), and the chain
+continues from big5t, the only arm that passed. In substance big4, big5 and big5t are one strength:
+every gap is a few Elo, the head-to-head and the field disagree on the sign, and big5t's better
+value loss doesn't show in play. Cutting the sampling earlier neither helps nor hurts. Together with
+big4's +4 over big3 on the field, **the 10x128 chain on 2000 games a step has stalled.** No app
+change: big5t isn't worth re-rating to replace Level 11 (big4) for +1.6.
+
+**Next lever (publisher, 2026-11-25): more games per step**, before a bigger net — it reuses
+everything in place and tests whether the chain is short of data rather than of capacity. Not
+started: the publisher ships the current app first. To be planned: games per step (e.g. 4000,
+~7 h of self-play) and whether the fine-tune mix and time scale with them; parent big5t (the
+rule's pick), temperature drop at 30.
+
 ## Also worth taking from KataGo once this runs
 
 - Playout cap randomization (most moves with a small search, a few with a full one recorded as

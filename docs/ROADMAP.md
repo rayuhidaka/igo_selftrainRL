@@ -1073,6 +1073,9 @@ later (Level 12 may be dropped for a later one). **big2f, with the fix in self-p
 field gate at 2363.6, top of the field (+109 over big1).** **big3, the next step, passed at
 2380.4 (big2f refit to 2329.6), +175 over big2f head-to-head.** **big4, the next step, passed at 2343.6
 (2026-11-24) but only +4 over big3 on the field (+90 head-to-head); promoted into the big field.**
-**Next: the temperature experiment** (`run_big5_temperature.sh`, planned in `docs/STRONGER_NET.md`):
-big5 (sampled moves until move 30) vs big5t (until move 12), both from big4, ~13-14 h — when the
-publisher says go, after igo-app's Level 11 match and dead-stone test free the CPU.
+**The temperature experiment** (`run_big5_temperature.sh`, 2026-11-24/25, result in
+`docs/STRONGER_NET.md`): big5 (sampled moves until move 30) vs big5t (until 12), both from big4.
+No difference: head-to-head −20 for big5t (noise), field gate big5t 2313.8 PASS, big4 2312.2, big5
+2309.0 FAIL — keep 30; the 10x128 chain on 2000 games a step has stalled. **Next lever: more games
+per step** (publisher, 2026-11-25), from big5t — **on hold** until the publisher has shipped the
+current app.
