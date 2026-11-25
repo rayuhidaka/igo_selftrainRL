@@ -20,12 +20,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing
 import random
 import time
 from collections import Counter
 from pathlib import Path
 
-from engine.capture import CAPTURE_DEPTH, CaptureReader
+from engine.capture import CAPTURE_DEPTH, CaptureReader, chain_at, liberties_of
 from engine.eye_space import BudgetExceeded
 from engine.move import Move, Pass, Play
 from engine.point import Point
@@ -52,20 +53,58 @@ class CaptureFight:
     def moves(self, position: Position) -> list[Move]:
         return [Play(p) for p in self.region if position.stone_at(p) == Stone.EMPTY and position.is_legal(Play(p))]
 
+    # Every node is judged with the full DEPTH, whatever depth `build_tree` has left: the app's
+    # PuzzlesTest does the same (engine/Capture.kt, CAPTURE_DEPTH), so a move the tree calls wrong
+    # deep down can't be one that still captures given more plies.
     def mover_wins(self, position: Position, depth: int) -> bool:
         """The attacker (to move) captures by force; or the defender (to move) gets away."""
         if position.to_play == self.attacker:
-            return self.reader.captures(position, depth)
-        return not self.reader.holds(position, depth)
+            return self.reader.captures(position, DEPTH)
+        return not self.reader.holds(position, DEPTH)
 
     def other_wins(self, position: Position, depth: int) -> bool:
         """The side *not* to move reaches its goal, whatever the side to move does."""
         if position.to_play == self.attacker:
-            return not self.reader.captures(position, depth)
-        return self.reader.holds(position, depth)
+            return not self.reader.captures(position, DEPTH)
+        return self.reader.holds(position, DEPTH)
+
+    # A capture puzzle ends with the stones off the board, not merely lost (build_tree).
+    settle_only = True
 
     def settled(self, position: Position) -> bool:
         return self.reader.status(position) != 0
+
+    def reply(self, position: Position, depth: int) -> Move | None:
+        """The defender's answer (to move, losing): an escape attempt a person would make -- extend
+        on a liberty, or capture an attacking stone next to the target -- the one leaving the most
+        liberties, then the one keeping the stones longest; another move only if none is legal.
+        None once the stones are off the board."""
+        if self.settled(position):
+            return None
+        chain = chain_at(position, self.target)
+        liberties = liberties_of(position, chain)
+        rescue: set[Point] = set()
+        for p in chain:
+            for n in position.neighbors(p):
+                if position.stone_at(n) == self.attacker:
+                    libs = liberties_of(position, chain_at(position, n))
+                    if len(libs) == 1:
+                        rescue |= libs
+        attempts = [Play(p) for p in sorted(liberties | rescue, key=lambda q: (q.row, q.col)) if position.is_legal(Play(p))]
+        if not attempts:
+            attempts = self.moves(position)
+        if not attempts:
+            return None
+
+        def score(move: Move) -> tuple[int, int]:
+            after = position.play(move)
+            if after.stone_at(self.target) == Stone.EMPTY:
+                return (-1, 0)
+            libs = len(liberties_of(after, chain_at(after, self.target)))
+            plies = self.reader.capture_depth(after, DEPTH) or 0
+            return (libs, plies)
+
+        return max(attempts, key=score)
 
     def fastest(self, position: Position, test, depth: int) -> int | None:
         for d in range(1, depth + 1):
@@ -117,6 +156,92 @@ def complete(node: dict) -> bool:
     return bool(good) and all("next" not in step or complete(step["next"]) for step in good.values())
 
 
+_NETS = None
+_ARGS = None
+
+
+def _init(args) -> None:
+    """A worker's setup: the nets that rank difficulty, loaded once."""
+    global _NETS, _ARGS
+    _ARGS = args
+    if not args.no_nets:
+        from bootstrap.inference import RayZeroPolicyValueNet  # torch only when needed
+
+        _NETS = {name: RayZeroPolicyValueNet(Path(path), 9) for name, path in DEFAULT_CHECKPOINTS.items()}
+
+
+def make_puzzle(job: tuple[int, dict]) -> tuple[int, dict | None, str]:
+    """One candidate -> (its index, the puzzle or None, what happened)."""
+    index, cand = job
+    args, nets = _ARGS, _NETS
+    attacker = SYMBOLS[cand["attacker"]]
+    target = Point(*cand["target"])
+    position = parse_board(cand["board"], attacker)
+    answer = Point(*cand["answer"])
+    try:
+        scout = CaptureReader(target, node_budget=args.budget)
+        empty = {p for p in area(scout, position, cand["line"]) if position.stone_at(p) == Stone.EMPTY}
+        region = empty
+        for _ in range(4):
+            fight = CaptureFight(target, region, attacker, args.budget)
+            tree = build_tree(fight, position, DEPTH, [0], args.max_nodes)
+            stuck = stuck_positions(tree, position)
+            if not stuck:
+                break
+            # Grow the area where the tree got stuck (points empty at the start only), and build again.
+            grown = set(region)
+            for pos in stuck:
+                grown |= {p for p in set(scout.attacker_points(pos)) | set(scout.defender_points(pos)) if position.stone_at(p) == Stone.EMPTY}
+            if grown == region:
+                break
+            region = grown
+    except TreeTooBig:
+        return index, None, "tree too big"
+    except Unclear:
+        return index, None, "unclear move"
+    except BudgetExceeded:
+        return index, None, "over budget"
+    if list(tree.get("good", {})) != [f"{answer.row},{answer.col}"]:
+        return index, None, "several answers" if len(tree.get("good", {})) > 1 else "tree disagrees"
+    if not complete(tree):
+        return index, None, "area too small"
+
+    file_name, rest = cand["source"].split("#")
+    game_index, move_number = (int(x) for x in rest.split("@"))
+    game = json.loads((args.games_dir / file_name).read_text())[game_index]
+
+    ordered = sorted(region, key=lambda p: (p.row, p.col))
+    wrong = [p for p in ordered if p != answer and position.is_legal(Play(p))]
+    difficulty, choices = 4, None
+    if nets:
+        for name, level in LEVELS.items():
+            prefs = region_policy(nets[name], position, ordered)
+            if prefs and max(prefs, key=prefs.get) == answer:
+                difficulty = level
+                break
+        gen11 = region_policy(nets["gen11"], position, ordered)
+        tempting = sorted(wrong, key=lambda p: -gen11.get(p, 0.0))[:2]
+        if len(tempting) == 2:
+            choices = [[p.row, p.col] for p in [answer, *tempting]]
+            random.Random(args.seed + index).shuffle(choices)
+    return index, {
+        "kind": "CAPTURE",
+        "toPlay": cand["attacker"],
+        "difficulty": difficulty,
+        "board": cand["board"],
+        "target": [target.row, target.col],
+        "region": [[p.row, p.col] for p in ordered],
+        "answer": [answer.row, answer.col],
+        "choices": choices,
+        "tree": tree,
+        "treeNodes": tree_nodes(tree),
+        "history": history_moves(game, move_number, position),
+        "source": cand["source"],
+        "matchup": cand["matchup"],
+        "technique": cand["technique"],
+    }, "kept"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("candidates", type=Path)
@@ -127,103 +252,26 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--seed", type=int, default=20261125)
     parser.add_argument("--first-id", type=int, default=1)
+    parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--no-nets", action="store_true")
     args = parser.parse_args()
 
-    nets = None
-    if not args.no_nets:
-        from bootstrap.inference import RayZeroPolicyValueNet  # torch only when needed
-
-        nets = {name: RayZeroPolicyValueNet(Path(path), 9) for name, path in DEFAULT_CHECKPOINTS.items()}
-
-    rng = random.Random(args.seed)
     candidates = json.loads(args.candidates.read_text())
     if args.limit:
         candidates = candidates[: args.limit]
-    games_cache: dict[str, list] = {}
-    puzzles: list[dict] = []
+    results: dict[int, dict] = {}
     stats = Counter()
     started = time.time()
-
-    for index, cand in enumerate(candidates):
-        attacker = SYMBOLS[cand["attacker"]]
-        target = Point(*cand["target"])
-        position = parse_board(cand["board"], attacker)
-        answer = Point(*cand["answer"])
-        fight = None
-        try:
-            scout = CaptureReader(target, node_budget=args.budget)
-            region = area(scout, position, cand["line"])
-            for _ in range(4):
-                fight = CaptureFight(target, region, attacker, args.budget)
-                tree = build_tree(fight, position, DEPTH, [0], args.max_nodes)
-                stuck = stuck_positions(tree, position)
-                if not stuck:
-                    break
-                # Grow the area where the tree got stuck, and build again.
-                grown = set(region)
-                for pos in stuck:
-                    grown |= set(scout.attacker_points(pos)) | set(scout.defender_points(pos))
-                if grown == region:
-                    break
-                region = grown
-        except TreeTooBig:
-            stats["tree too big"] += 1
-            continue
-        except Unclear:
-            stats["unclear move"] += 1
-            continue
-        except BudgetExceeded:
-            stats["over budget"] += 1
-            continue
-        if list(tree.get("good", {})) != [f"{answer.row},{answer.col}"]:
-            stats["several answers" if len(tree.get("good", {})) > 1 else "tree disagrees"] += 1
-            continue
-        if not complete(tree):
-            stats["area too small"] += 1
-            continue
-
-        file_name, rest = cand["source"].split("#")
-        game_index, move_number = (int(x) for x in rest.split("@"))
-        if file_name not in games_cache:
-            games_cache[file_name] = json.loads((args.games_dir / file_name).read_text())
-        game = games_cache[file_name][game_index]
-
-        ordered = sorted(region, key=lambda p: (p.row, p.col))
-        wrong = [p for p in ordered if p != answer and position.stone_at(p) == Stone.EMPTY and position.is_legal(Play(p))]
-        difficulty, choices = 4, None
-        if nets:
-            for name, level in LEVELS.items():
-                prefs = region_policy(nets[name], position, ordered)
-                if prefs and max(prefs, key=prefs.get) == answer:
-                    difficulty = level
-                    break
-            gen11 = region_policy(nets["gen11"], position, ordered)
-            tempting = sorted(wrong, key=lambda p: -gen11.get(p, 0.0))[:2]
-            if len(tempting) == 2:
-                choices = [[p.row, p.col] for p in [answer, *tempting]]
-                rng.shuffle(choices)
-
-        puzzles.append({
-            "id": f"cap-{len(puzzles) + args.first_id:04d}",
-            "kind": "CAPTURE",
-            "toPlay": cand["attacker"],
-            "difficulty": difficulty,
-            "board": cand["board"],
-            "target": [target.row, target.col],
-            "region": [[p.row, p.col] for p in ordered],
-            "answer": [answer.row, answer.col],
-            "choices": choices,
-            "tree": tree,
-            "treeNodes": tree_nodes(tree),
-            "history": history_moves(game, move_number, position),
-            "source": cand["source"],
-            "matchup": cand["matchup"],
-            "technique": cand["technique"],
-        })
-        stats["kept"] += 1
-        if (index + 1) % 25 == 0:
-            print(f"{index + 1}/{len(candidates)} candidates, {dict(stats)}, {time.time() - started:.0f}s", flush=True)
+    with multiprocessing.Pool(args.workers, initializer=_init, initargs=(args,)) as pool:
+        for done, (index, puzzle, outcome) in enumerate(pool.imap_unordered(make_puzzle, list(enumerate(candidates))), start=1):
+            stats[outcome] += 1
+            if puzzle is not None:
+                results[index] = puzzle
+            if done % 25 == 0:
+                print(f"{done}/{len(candidates)} candidates, {dict(stats)}, {time.time() - started:.0f}s", flush=True)
+    puzzles = []
+    for index in sorted(results):
+        puzzles.append({"id": f"cap-{len(puzzles) + args.first_id:04d}", **results[index]})
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "puzzles.json").write_text(json.dumps(puzzles, indent=1))
