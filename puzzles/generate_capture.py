@@ -68,8 +68,8 @@ class CaptureFight:
             return not self.reader.captures(position, DEPTH)
         return self.reader.holds(position, DEPTH)
 
-    # A capture puzzle ends with the stones off the board, not merely lost (build_tree).
-    settle_only = True
+    # A line ends once the stones can no longer escape (build_tree's nothing_better_than_pass), as for
+    # life and death: insisting on the stones coming off makes a pass there neither right nor wrong.
 
     def settled(self, position: Position) -> bool:
         return self.reader.status(position) != 0
