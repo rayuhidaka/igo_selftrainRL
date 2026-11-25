@@ -286,6 +286,7 @@ def main() -> None:
     parser.add_argument("--budget", type=int, default=400_000)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--seed", type=int, default=20261119)
+    parser.add_argument("--first-id", type=int, default=1, help="number of the first puzzle id (a refill continues after the shipped ones)")
     parser.add_argument("--no-nets", action="store_true", help="skip the net ranking (for a quick tree-only run)")
     args = parser.parse_args()
 
@@ -360,7 +361,7 @@ def main() -> None:
                     rng.shuffle(choices)
 
             puzzles.append({
-                "id": f"ld-{len(puzzles) + 1:04d}",
+                "id": f"ld-{len(puzzles) + args.first_id:04d}",
                 "kind": goal.upper(),
                 "toPlay": "X" if player == Stone.BLACK else "O",
                 "difficulty": difficulty,
