@@ -159,14 +159,17 @@ def build_tree(fight: Fight, position: Position, depth: int, counter: list[int],
     counter[0] += 1
     if counter[0] > max_nodes:
         raise TreeTooBig()
-    if fight.settled(position) or nothing_better_than_pass(fight, position, depth):
+    # A fight may insist on being settled on the board (capture puzzles: the stones must come off).
+    settle_only = getattr(fight, "settle_only", False)
+    if fight.settled(position) or (not settle_only and nothing_better_than_pass(fight, position, depth)):
         return {"solved": True}
     good: dict[str, dict] = {}
     bad: dict[str, list] = {}
     for move in [*fight.moves(position), Pass()]:
         after = position.play(move)
         if not isinstance(move, Pass) and fight.other_wins(after, depth - 1):
-            reply = stubborn_reply(fight, after, depth - 1)
+            # A fight may pick its own reply (capture puzzles: an escape attempt, not a move elsewhere).
+            reply = fight.reply(after, depth - 1) if hasattr(fight, "reply") else stubborn_reply(fight, after, depth - 1)
             if reply is None:
                 good[key(move)] = {"solved": True}
             else:
