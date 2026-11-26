@@ -190,6 +190,27 @@ class SearchPoolTest(unittest.TestCase):
             for move, count in expected.move_visits.items():
                 self.assertEqual(visits[move_index(move, size)], count, f"game {game} move {move}")
 
+    def test_principal_variation_follows_the_most_visited_moves(self) -> None:
+        size, sims = 9, 300
+        net = _PlanesNet(size, seed=11)
+        positions = [p for p, _ in _random_games(size, 2, seed=5)][::11][:6]
+        pool = SearchPool(len(positions), size, sims)
+        for game, position in enumerate(positions):
+            pool.begin(game, Board.from_position(position), sims, c_puct=1.5, komi=7.5)
+        _run_pool(pool, net)
+        for game, position in enumerate(positions):
+            visits, _ = pool.root_visits(game)
+            line = pool.principal_variation(game, max_len=8)
+            self.assertLessEqual(len(line), 8)
+            if visits.max() >= 2 and int(visits.argmax()) != size * size:
+                self.assertEqual(line[0], int(visits.argmax()))
+            board = Board.from_position(position)
+            for move in line:
+                self.assertNotEqual(move, size * size)
+                self.assertTrue(board.legal_mask()[move])
+                board.play(move)
+            self.assertEqual(pool.principal_variation(game, min_visits=sims + 1), [])
+
     def test_finished_games_are_scored_not_evaluated(self) -> None:
         # Black far ahead on 3x3 after white passed: passing out wins, and the search sees it.
         size = 3

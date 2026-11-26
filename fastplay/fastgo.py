@@ -205,6 +205,13 @@ class SearchPool:
     def done(self, game: int) -> bool:
         return bool(_lib.fg_search_done(self._pool, game))
 
+    def principal_variation(self, game: int, max_len: int = 10, min_visits: int = 2) -> list[int]:
+        """`game`'s line: from the root, the most visited move at each step while it has at least
+        `min_visits` visits and isn't a pass, at most `max_len` moves (move indices)."""
+        out = np.zeros(max_len, dtype=np.int32)
+        n = _lib.fg_principal_variation(self._pool, game, out.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)), max_len, min_visits)
+        return [int(m) for m in out[:n]]
+
     def root_visits(self, game: int) -> tuple[np.ndarray, float]:
         """`game`'s root visit counts per move (`size*size+1`) and its root value."""
         value = _lib.fg_root_visits(self._pool, game, self._visits.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)))
@@ -239,4 +246,5 @@ _lib.fg_root_visits.restype = ctypes.c_double
 _lib.fg_root_visits.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int32)]
 _lib.fg_root_priors.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
 _lib.fg_search_done.argtypes = [ctypes.c_void_p, ctypes.c_int]
+_lib.fg_principal_variation.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int32), ctypes.c_int, ctypes.c_int]
 _lib.fg_pending_game.argtypes = [ctypes.c_void_p, ctypes.c_int]

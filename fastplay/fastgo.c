@@ -547,6 +547,27 @@ void fg_root_priors(const fg_pool *pool, int g, double *out) {
     }
 }
 
+/** Game g's principal variation into out (at most max_len moves) and its length: from the root,
+ * the most visited child at each step, as long as it was visited at least min_visits times and
+ * isn't a pass (the app's SearchResult.moveLines rule; best-move puzzles, igo-app PUZZLES.md). */
+int fg_principal_variation(const fg_pool *pool, int g, int32_t *out, int max_len, int min_visits) {
+    const fg_search *s = &pool->games[g];
+    int pass = pool->size * pool->size;
+    const fg_node *node = &s->nodes[0];
+    int len = 0;
+    while (len < max_len && node->first_child >= 0) {
+        const fg_node *best = NULL;
+        for (int i = 0; i < node->num_children; i++) {
+            const fg_node *child = &s->nodes[node->first_child + i];
+            if (best == NULL || child->visits > best->visits) best = child;
+        }
+        if (best == NULL || best->visits < min_visits || best->move == pass) break;
+        out[len++] = best->move;
+        node = best;
+    }
+    return len;
+}
+
 /** Whether game g's search has run all its simulations. */
 int fg_search_done(const fg_pool *pool, int g) { return !pool->games[g].active; }
 
