@@ -33,11 +33,14 @@ from engine.point import Point
 from engine.position import Position
 from engine.stone import Stone
 from puzzles.generate import (
-    DEFAULT_CHECKPOINTS, SYMBOLS, TreeTooBig, Unclear, build_tree, history_moves, parse_board,
-    region_policy, tree_nodes,
+    DEFAULT_CHECKPOINTS, REFUTATION_PLIES, SYMBOLS, TreeTooBig, Unclear, build_tree, history_moves,
+    parse_board, point_json, region_policy, tree_nodes,
 )
 
 DEPTH = 17
+# A wrong move's line stops once the defender has given the stones this many liberties: free for
+# anyone to see (the reader has already proved the attacker can't capture them).
+SHOWN_FREE = 3
 
 
 class CaptureFight:
@@ -81,6 +84,21 @@ class CaptureFight:
         None once the stones are off the board."""
         if self.settled(position):
             return None
+        attempts = self.escape_attempts(position) or self.moves(position)
+        if not attempts:
+            return None
+
+        def score(move: Move) -> tuple[int, int]:
+            after = position.play(move)
+            if after.stone_at(self.target) == Stone.EMPTY:
+                return (-1, 0)
+            return (self.target_liberties(after), self.reader.capture_depth(after, DEPTH) or 0)
+
+        return max(attempts, key=score)
+
+    def escape_attempts(self, position: Position) -> list[Move]:
+        """The defender's (to move) natural tries: extend on a liberty of the stones, or capture an
+        attacking stone next to them that is in atari."""
         chain = chain_at(position, self.target)
         liberties = liberties_of(position, chain)
         rescue: set[Point] = set()
@@ -90,21 +108,72 @@ class CaptureFight:
                     libs = liberties_of(position, chain_at(position, n))
                     if len(libs) == 1:
                         rescue |= libs
-        attempts = [Play(p) for p in sorted(liberties | rescue, key=lambda q: (q.row, q.col)) if position.is_legal(Play(p))]
-        if not attempts:
-            attempts = self.moves(position)
-        if not attempts:
-            return None
+        return [Play(p) for p in sorted(liberties | rescue, key=lambda q: (q.row, q.col)) if position.is_legal(Play(p))]
 
-        def score(move: Move) -> tuple[int, int]:
+    def target_liberties(self, position: Position) -> int:
+        """The marked stones' liberties; -1 once they are off the board."""
+        if position.stone_at(self.target) == Stone.EMPTY:
+            return -1
+        return len(liberties_of(position, chain_at(position, self.target)))
+
+    def refutation(self, position: Position, depth: int) -> list:
+        """After a wrong move (the defender to move, and getting away): the defender's escape, then
+        the attacker's most direct try (an atari) and the next escape, until the stones have
+        `SHOWN_FREE` liberties, the attacker has no atari left, or `REFUTATION_PLIES`. Replaces `generate.refutation`, whose "fastest" and
+        "most stubborn" moves are all equal here (the reader judges at the full depth) and so fell
+        to the first point of the area: lines wandered into a corner long after the stones were free.
+        Every defender move is one after which the attacker can't capture, so the line always ends
+        with the stones free (PuzzlesTest checks it)."""
+        line: list = []
+        while len(line) < REFUTATION_PLIES:
+            escape = self._winning_escape(position)
+            if escape is None:
+                # Only passing keeps the stones free. At the start that is the whole story; after
+                # the attacker's try, end before it (the stones were free there as well).
+                if line:
+                    line.pop()
+                break
+            line.append(point_json(escape))
+            position = position.play(escape)
+            if self.target_liberties(position) >= SHOWN_FREE or len(line) + 2 > REFUTATION_PLIES:
+                break
+            tries = self._attacker_tries(position)
+            if not tries or self.target_liberties(position.play(tries[0])) > 1:
+                break  # no atari left: nothing presses the stones any more
+            line.append(point_json(tries[0]))
+            position = position.play(tries[0])
+        return line
+
+    def _winning_escape(self, position: Position) -> Move | None:
+        """The defender's (to move) move after which the attacker can't capture: an escape attempt
+        if one works (the most liberties first), else any such move; None if there is none (only
+        passing keeps the stones free, so there is nothing to show)."""
+        attempts = self.escape_attempts(position)
+        others = [m for m in self._legal(position, set(self.reader.defender_points(position)) | set(self.region)) if m not in attempts]
+        for group in (attempts, others):
+            for move in sorted(group, key=lambda m: -self.target_liberties(position.play(m))):
+                if not self.reader.captures(position.play(move), DEPTH):
+                    return move
+        return None
+
+    def _attacker_tries(self, position: Position) -> list[Move]:
+        """The attacker's (to move, losing) tries, most direct first: the fewest liberties left to the
+        stones, then next to them, then the most liberties for the stone played."""
+        chain = chain_at(position, self.target)
+        near = {n for p in chain for n in position.neighbors(p)}
+
+        def score(move: Move) -> tuple[int, int, int]:
             after = position.play(move)
-            if after.stone_at(self.target) == Stone.EMPTY:
-                return (-1, 0)
-            libs = len(liberties_of(after, chain_at(after, self.target)))
-            plies = self.reader.capture_depth(after, DEPTH) or 0
-            return (libs, plies)
+            own = len(liberties_of(after, chain_at(after, move.point)))
+            return (self.target_liberties(after), move.point not in near, -own)
 
-        return max(attempts, key=score)
+        moves = self._legal(position, set(self.reader.attacker_points(position)) | set(self.region))
+        moves = [m for m in moves if position.play(m).stone_at(self.target) != Stone.EMPTY]
+        return sorted(moves, key=score)
+
+    def _legal(self, position: Position, points: set[Point]) -> list[Move]:
+        return [Play(p) for p in sorted(points, key=lambda q: (q.row, q.col))
+                if position.stone_at(p) == Stone.EMPTY and position.is_legal(Play(p))]
 
     def fastest(self, position: Position, test, depth: int) -> int | None:
         for d in range(1, depth + 1):

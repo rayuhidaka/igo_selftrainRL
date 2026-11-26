@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import unittest
 
-from puzzles.generate_capture import capture_difficulty, main_line_plies
+from engine.capture import CaptureReader
+from engine.move import Play
+from engine.point import Point
+from engine.stone import Stone
+from puzzles.generate import parse_board
+from puzzles.generate_capture import DEPTH, CaptureFight, capture_difficulty, main_line_plies
 
 
 class MainLinePliesTest(unittest.TestCase):
@@ -30,6 +35,28 @@ class CaptureDifficultyTest(unittest.TestCase):
         self.assertEqual(capture_difficulty("net", 2), 2)
         self.assertEqual(capture_difficulty("throw-in", 5), 3)
         self.assertEqual(capture_difficulty("net", 7), 4)
+
+
+class RefutationTest(unittest.TestCase):
+    """A wrong move's line: the natural escape, ending once the stones are plainly free."""
+
+    def test_atari_from_the_wrong_side_shows_the_escape(self) -> None:
+        # White's two stones on the edge have two liberties, (7,5) and (8,6). The atari at (8,6)
+        # drives them out: White extends at (7,5), and Black's ataris only push them along until
+        # they have three liberties.
+        rows = ["........."] * 7 + ["....X....", "...XOO..."]
+        position = parse_board(rows, Stone.BLACK).play(Play(Point(8, 6)))
+        region = {Point(r, c) for r in range(9) for c in range(9) if position.stone_at(Point(r, c)) == Stone.EMPTY}
+        fight = CaptureFight(Point(8, 4), region, Stone.BLACK, 200_000)
+        line = fight.refutation(position, DEPTH)
+        self.assertEqual(line[0], [7, 5])
+        self.assertEqual(len(line) % 2, 1, "ends with the defender's move")
+        for i, step in enumerate(line):
+            position = position.play(Play(Point(*step)))
+            if i % 2 == 1:
+                self.assertEqual(fight.target_liberties(position), 1, f"attacker move {step} is an atari")
+        self.assertGreaterEqual(fight.target_liberties(position), 3)
+        self.assertFalse(CaptureReader(Point(8, 4), node_budget=200_000).captures(position, DEPTH))
 
 
 if __name__ == "__main__":

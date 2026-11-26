@@ -180,7 +180,11 @@ def build_tree(fight: Fight, position: Position, depth: int, counter: list[int],
         else:
             if not fight.mover_wins(after, depth - 1):
                 raise Unclear()  # not a proven win, and not a proven loss either
-            bad[key(move)] = refutation(fight, after, depth - 1)
+            # A fight may build its own line (capture puzzles: escapes and direct tries, see there).
+            if hasattr(fight, "refutation"):
+                bad[key(move)] = fight.refutation(after, depth - 1)
+            else:
+                bad[key(move)] = refutation(fight, after, depth - 1)
     return {"good": good, "bad": bad}
 
 
