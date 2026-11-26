@@ -33,7 +33,7 @@ from engine.point import Point
 from engine.position import Position
 from engine.stone import Stone
 from puzzles.generate import (
-    DEFAULT_CHECKPOINTS, LEVELS, SYMBOLS, TreeTooBig, Unclear, build_tree, history_moves, parse_board,
+    DEFAULT_CHECKPOINTS, SYMBOLS, TreeTooBig, Unclear, build_tree, history_moves, parse_board,
     region_policy, tree_nodes,
 )
 
@@ -148,6 +148,36 @@ def stuck_positions(node: dict, position: Position) -> list[Position]:
     return out
 
 
+def main_line_plies(tree: dict) -> int:
+    """Moves along the answer's line (answer, reply, next answer ...) until the stones can't escape."""
+    plies, node = 0, tree
+    while not node.get("solved"):
+        good = node.get("good", {})
+        if not good:
+            break
+        step = next(iter(good.values()))
+        plies += 1
+        if "next" not in step:
+            break
+        plies += 1
+        node = step["next"]
+    return plies
+
+
+def capture_difficulty(technique: str, plies: int) -> int:
+    """1 (easy) to 4, from the reading rather than the nets.
+
+    The life-and-death rank (which net's first choice in the area is the answer) doesn't work here:
+    in a game position the nets weigh how big a move is, so a two-move capture often came out 4
+    (publisher, 2026-11-26: "level 4 is not too difficult for a beginner"). Ataris and ladders go
+    on with ataris a beginner can follow: 1, or 2 when long. A throw-in (into atari on purpose) or
+    a net (not an atari) is a new idea: 2, then 3 from 4 moves and 4 from 7.
+    """
+    if technique in ("atari", "ladder"):
+        return 1 if plies <= 4 else 2
+    return 2 if plies <= 3 else 3 if plies <= 6 else 4
+
+
 def complete(node: dict) -> bool:
     """Every node that isn't solved has a right move, all the way down."""
     if node.get("solved"):
@@ -161,13 +191,13 @@ _ARGS = None
 
 
 def _init(args) -> None:
-    """A worker's setup: the nets that rank difficulty, loaded once."""
+    """A worker's setup: gen11, which picks the A/B/C choices' tempting wrong moves, loaded once."""
     global _NETS, _ARGS
     _ARGS = args
     if not args.no_nets:
         from bootstrap.inference import RayZeroPolicyValueNet  # torch only when needed
 
-        _NETS = {name: RayZeroPolicyValueNet(Path(path), 9) for name, path in DEFAULT_CHECKPOINTS.items()}
+        _NETS = {"gen11": RayZeroPolicyValueNet(Path(DEFAULT_CHECKPOINTS["gen11"]), 9)}
 
 
 def make_puzzle(job: tuple[int, dict]) -> tuple[int, dict | None, str]:
@@ -212,13 +242,9 @@ def make_puzzle(job: tuple[int, dict]) -> tuple[int, dict | None, str]:
 
     ordered = sorted(region, key=lambda p: (p.row, p.col))
     wrong = [p for p in ordered if p != answer and position.is_legal(Play(p))]
-    difficulty, choices = 4, None
+    difficulty = capture_difficulty(cand["technique"], main_line_plies(tree))
+    choices = None
     if nets:
-        for name, level in LEVELS.items():
-            prefs = region_policy(nets[name], position, ordered)
-            if prefs and max(prefs, key=prefs.get) == answer:
-                difficulty = level
-                break
         gen11 = region_policy(nets["gen11"], position, ordered)
         tempting = sorted(wrong, key=lambda p: -gen11.get(p, 0.0))[:2]
         if len(tempting) == 2:
